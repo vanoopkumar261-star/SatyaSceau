@@ -63,9 +63,13 @@ def _find_utr(text: str) -> str | None:
 # --- Amount ----------------------------------------------------------------
 
 _NUM = r"(\d[\d,]*(?:\.\d{1,2})?)"
-# ₹ / Rs / Rs. / INR, and the usual Tesseract misreads of ₹ (% X x € ¥) glued to the number.
-_AMT_SYMBOL = re.compile(r"(?:(?<![A-Za-z])(?:Rs\.?|INR)\s*|₹\s*|(?<![\w.,])[%Xx€¥]\s?)" + _NUM, re.I)
+# ₹ / Rs / Rs. / INR, and the usual Tesseract misreads of ₹ (% X x € ¥ £) glued to the number.
+_AMT_SYMBOL = re.compile(r"(?:(?<![A-Za-z])(?:Rs\.?|INR)\s*|₹\s*|(?<![\w.,])[%Xx€¥£]\s?)" + _NUM, re.I)
 _AMT_KEYWORD = re.compile(r"paid|successful|sent|paying", re.I)
+# Lines with a time or a month name are dates ("01:31 am on 22 Nov 2026"), never the amount.
+_DATE_LINE = re.compile(
+    r"\b\d{1,2}:\d{2}\b|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b", re.I
+)
 # Standalone number: not part of a date/time/id ("12:30", "22/11/2026", "AB123").
 _AMT_STANDALONE = re.compile(r"(?<![\w.,:/\-])(\d{1,7}(?:,\d{2,3})*(?:\.\d{1,2})?)(?![\w:/\-]|\.\d)")
 
@@ -90,6 +94,8 @@ def _find_amount(text: str, utr: str | None) -> float | None:
     for i, line in enumerate(lines):
         if _AMT_KEYWORD.search(line):
             for near in lines[max(0, i - 2) : i + 3]:
+                if _DATE_LINE.search(near):
+                    continue
                 for m in _AMT_STANDALONE.finditer(near):
                     amount = _to_amount(m.group(1))
                     if amount is not None:
@@ -107,18 +113,22 @@ def extract_fields(text: str) -> dict:
 
 
 def _preprocess(image_bytes: bytes) -> np.ndarray | None:
-    """Decode in memory (nothing touches disk) and clean up for Tesseract."""
+    """Decode in memory (nothing touches disk) and clean up for Tesseract.
+
+    Tuned on real PhonePe/GPay screenshots: both are dark-mode, where an adaptive threshold
+    destroyed the text. Plain greyscale (inverted when dark) + upscale reads them at 85-96 conf.
+    """
     img = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
     if img is None:
         return None
-    if img.shape[1] < 1000:
-        img = cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+    width = img.shape[1]
+    if width < 2000:  # phone screenshots are 700-1100 px wide; ~2000 px reads best
+        scale = min(3, max(2, round(2000 / width)))
+        img = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
     grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    sharpen = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype=np.float32)
-    grey = cv2.filter2D(grey, -1, sharpen)
-    return cv2.adaptiveThreshold(
-        grey, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 15
-    )
+    if grey.mean() < 127:  # dark-mode app (light text on dark): Tesseract wants dark text on light
+        grey = 255 - grey
+    return grey
 
 
 def _utr_confidence(words: list[tuple[str, float]], utr: str) -> float:

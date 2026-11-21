@@ -91,6 +91,55 @@ def test_no_utr_gives_none():
     assert extract_fields("") == {"utr": None, "amount": None}
 
 
+# --- Patterns seen in REAL screenshots (structure only; numbers are made up) ----
+
+# PhonePe dark mode: the rupee sign was read as £, the T-id must be ignored, UTR is labelled "UTR:",
+# and the header date line must not be mistaken for the amount.
+REAL_PHONEPE = """pe Transaction Successful
+01:31 am on 22 Nov 2026
+Paid to
+The Waffle Busters £150
+Q049100471@ybl
+Payment Details
+PhonePe Transaction ID
+T261122013108669098781
+Debited from
+XXXXXXXXXXX1599 £150
+UTR: 094974384030
+"""
+
+# GPay dark mode: the rupee sign was read as %, the 12-digit "UPI transaction ID" has no UTR label,
+# and the "Google transaction ID" (14 letters/digits) must not be taken.
+REAL_GPAY = """To SMOOTHIE ZONE CAFE AND BAKERY
+%50 Completed
+3 Nov 2026, 1:24 pm
+Payment of 50 completed
+UPI transaction ID
+630748200742
+To: SMOOTHIE ZONE CAFE AND BAKERY
+Google transaction ID
+CICAgPiFwJTnVg
+"""
+
+
+def test_real_phonepe_pattern():
+    assert extract_fields(REAL_PHONEPE) == {"utr": "094974384030", "amount": 150.0}
+
+
+def test_real_gpay_pattern():
+    assert extract_fields(REAL_GPAY) == {"utr": "630748200742", "amount": 50.0}
+
+
+def test_leading_zero_utr_kept_as_text():
+    assert extract_fields("UTR: 094974384030")["utr"] == "094974384030"
+
+
+def test_date_line_is_never_the_amount():
+    assert extract_fields("Transaction Successful\n01:31 am on 22 Nov 2026")["amount"] is None
+    # but an amount on its own line near "successful" is still found
+    assert extract_fields("Transaction Successful\n01:31 am on 22 Nov 2026\n150")["amount"] == 150.0
+
+
 # --- POST /api/proof (validation + happy path) --------------------------------
 
 from io import BytesIO  # noqa: E402
