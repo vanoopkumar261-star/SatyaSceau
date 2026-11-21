@@ -24,6 +24,8 @@ def _path(name: str, default: Path) -> Path:
 class Settings:
     def __init__(self) -> None:
         self.APP_VERSION = "0.1.0"
+        self.STATIC_DIR = STATIC_DIR  # also reachable as settings.* (WORK_SPLIT lists them with settings)
+        self.DATA_DIR = DATA_DIR
         self.DATABASE_URL = os.getenv(
             "DATABASE_URL", f"sqlite:///{(DATA_DIR / 'satyasceau.db').as_posix()}"
         )

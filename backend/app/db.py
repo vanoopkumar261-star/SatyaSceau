@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 
+from sqlalchemy import inspect
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.config import DATA_DIR, settings
@@ -34,6 +35,25 @@ def init_db(bind=engine) -> None:
     from app import models  # noqa: F401  (registers the tables)
 
     SQLModel.metadata.create_all(bind)
+    _add_missing_columns(bind)
+
+
+def _add_missing_columns(bind) -> None:
+    """Tiny additive migration: when a model gains a column, add it to existing local DBs.
+
+    create_all() never alters existing tables, so without this every teammate would have to
+    delete backend/data/satyasceau.db after pulling. Existing rows get NULL in the new column.
+    """
+    insp = inspect(bind)
+    with bind.begin() as conn:
+        for table in SQLModel.metadata.sorted_tables:
+            if not insp.has_table(table.name):
+                continue
+            existing = {col["name"] for col in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name not in existing:
+                    col_type = col.type.compile(dialect=bind.dialect)
+                    conn.exec_driver_sql(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col_type}')
 
 
 def get_session():

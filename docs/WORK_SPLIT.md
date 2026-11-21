@@ -122,9 +122,10 @@ Pile 1  events.publish(merchant_id, case)          (thread-safe; the matcher cal
 
 **Endpoints**
 - **Pile 1:**
-  - `POST /api/merchants {name, upi_id}` returns `{id, name, api_token, pay_url, merchant_url, qr_png_base64}`
+  - `POST /api/merchants {name, upi_id}` returns `{id, name, api_token, pay_url, merchant_url, qr_png_base64}`. `merchant_url` = `/merchant?m=<id>#k=<screen_key>`
   - `GET /api/merchants/{id}/qr.png`
-  - `GET /api/merchants/{id}/stream` (SSE `event: case`)
+  - `GET /api/merchants/{id}/stream?k=<screen_key>` (SSE `event: case`)
+  - `GET /api/merchants/{id}/cases?k=<screen_key>&limit=10` (newest first). The merchant id is public (it's on the QR), so both of these require the read-only screen key (403 otherwise).
   - `GET /api/cases/{id}`
   - `GET /pay/{id}` (serves Pile 2's `pay.html`)
   - `GET /merchant?m=<id>`
