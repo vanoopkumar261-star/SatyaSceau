@@ -24,7 +24,8 @@ SatyaSceau ties the customer's screenshot to a real bank credit on the merchant'
 - OCR of UTR and amount with Tesseract and OpenCV. Images are processed in memory and never stored.
 - Bank-SMS ingest with a DLT sender allowlist. OTP, debit and promo messages are dropped.
 - Replay protection enforced by the database (a unique UTR claim, race-safe), plus duplicate-screenshot detection (SHA-256 + perceptual hash)
-- Live merchant screen (SSE with automatic polling fallback) with Hindi/English voice verdicts
+- Live merchant screen (SSE with automatic polling fallback) with Hindi/English voice verdicts. The customer's phone speaks the verdict too.
+- No forwarder app? The merchant can paste the bank's credit SMS on their screen (recorded as hand-pasted evidence)
 - Ed25519-signed, write-once evidence records with in-page verification
 - Privacy by design: consent-gated SMS forwarding, 7-day retention for bank credits, no raw text stored
 
