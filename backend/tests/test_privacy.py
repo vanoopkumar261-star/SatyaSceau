@@ -79,7 +79,7 @@ def test_mock_bank_sends_the_agreed_demo_sms(client, session, monkeypatch):
         return BankCredit(merchant_id=merchant.id, utr="x", amount=1, credited_at=received_at, sender_id=sender)
 
     monkeypatch.setattr(ingest, "ingest_sms", fake_ingest)
-    r = client.post("/api/mock-bank", json={"merchant_id": m.id, "utr": "412345678901", "amount": 1250})
+    r = client.post("/api/mock-bank", json={"merchant_id": m.id, "utr": "412345678901", "amount": 1250, "k": m.screen_key})
     assert r.status_code == 200 and r.json() == {"accepted": True}
     assert seen["sender"] == "AX-HDFCBK" and seen["merchant"] == m.id
     assert seen["body"].startswith("Rs.1250.00 credited to A/c XX1234 on ")
@@ -91,7 +91,21 @@ def test_mock_bank_not_accepted_and_unknown_merchant(client, session, monkeypatc
 
     m = _merchant(session)
     monkeypatch.setattr(ingest, "ingest_sms", lambda *a, **k: None)
-    r = client.post("/api/mock-bank", json={"merchant_id": m.id, "utr": "1", "amount": 5})
+    r = client.post("/api/mock-bank", json={"merchant_id": m.id, "utr": "1", "amount": 5, "k": m.screen_key})
     assert r.json() == {"accepted": False}
     assert client.post("/api/mock-bank", json={"merchant_id": "nope", "utr": "1", "amount": 5}).status_code == 404
     assert client.get("/mock-bank").status_code == 200
+
+
+def test_mock_bank_requires_the_shop_screen_key(client, session, monkeypatch):
+    """The merchant id is public (QR). Without the key a customer could fake a credit for their own UTR."""
+    from app import ingest
+
+    m = _merchant(session)
+    called = []
+    monkeypatch.setattr(ingest, "ingest_sms", lambda *a, **k: called.append(1))
+    body = {"merchant_id": m.id, "utr": "412345678901", "amount": 1}
+    assert client.post("/api/mock-bank", json=body).status_code == 403
+    assert client.post("/api/mock-bank", json=body | {"k": "wrong"}).status_code == 403
+    assert client.post("/api/mock-bank", json=body | {"k": m.api_token}).status_code == 403
+    assert called == []

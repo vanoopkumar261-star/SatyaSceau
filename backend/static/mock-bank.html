@@ -34,6 +34,8 @@
     <form id="form">
       <label for="merchant">Merchant ID</label>
       <input id="merchant" required autocomplete="off">
+      <label for="key">Screen key <small>(filled in if you opened the merchant screen on this device)</small></label>
+      <input id="key" required autocomplete="off" spellcheck="false">
       <label for="utr">UTR (12 digits)</label>
       <input id="utr" required inputmode="numeric" pattern="[0-9]{12}" maxlength="12" autocomplete="off">
       <label for="amount">Amount (₹)</label>
@@ -47,6 +49,12 @@
   var $ = function (id) { return document.getElementById(id); };
   var q = new URLSearchParams(location.search).get("m");
   if (q) $("merchant").value = q;
+  // Screen key: from a /mock-bank?m=<id>#k=<key> link, or the one the merchant screen saved on this device.
+  function savedKey(id) { try { return localStorage.getItem("satyasceau.key." + id) || ""; } catch (e) { return ""; } }
+  var hashKey = new URLSearchParams(location.hash.slice(1)).get("k");
+  if (hashKey) { $("key").value = hashKey; history.replaceState(null, "", location.pathname + location.search); }
+  else if (q) $("key").value = savedKey(q);
+  $("merchant").addEventListener("change", function () { if (!$("key").value) $("key").value = savedKey($("merchant").value.trim()); });
 
   $("form").addEventListener("submit", function (e) {
     e.preventDefault();
@@ -56,7 +64,7 @@
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ merchant_id: $("merchant").value.trim(), utr: $("utr").value.trim(),
-                             amount: parseFloat($("amount").value) })
+                             amount: parseFloat($("amount").value), k: $("key").value.trim() })
     })
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (b) { return { code: r.status, body: b }; }); })
       .then(function (res) {
@@ -64,6 +72,7 @@
         if (res.code === 200 && res.body.accepted) { out.classList.add("ok"); out.textContent = "Accepted ✓ — bank credit stored."; }
         else if (res.code === 200) { out.classList.add("no"); out.textContent = "Rejected — the SMS was not accepted as a bank credit."; }
         else if (res.code === 404) { out.classList.add("err"); out.textContent = "Unknown merchant ID."; }
+        else if (res.code === 403) { out.classList.add("err"); out.textContent = "Wrong or missing screen key. Open the merchant screen on this device first, or paste its key."; }
         else { out.classList.add("err"); out.textContent = "Error " + res.code + ". Check the fields."; }
       })
       .catch(function () { out.classList.remove("hidden", "ok", "no"); out.classList.add("err"); out.textContent = "No connection."; })
