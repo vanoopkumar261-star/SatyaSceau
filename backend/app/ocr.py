@@ -63,8 +63,8 @@ def _find_utr(text: str) -> str | None:
 # --- Amount ----------------------------------------------------------------
 
 _NUM = r"(\d[\d,]*(?:\.\d{1,2})?)"
-# ₹ / Rs / Rs. / INR, and the usual Tesseract misreads of ₹ (% X x € ¥ £) glued to the number.
-_AMT_SYMBOL = re.compile(r"(?:(?<![A-Za-z])(?:Rs\.?|INR)\s*|₹\s*|(?<![\w.,])[%Xx€¥£]\s?)" + _NUM, re.I)
+# ₹ / Rs / Rs. / INR, and the usual Tesseract misreads of ₹ (% X x € ¥ £ <) glued to the number.
+_AMT_SYMBOL = re.compile(r"(?:(?<![A-Za-z])(?:Rs\.?|INR)\s*|₹\s*|(?<![\w.,])[%Xx€¥£<]\s?)" + _NUM, re.I)
 _AMT_KEYWORD = re.compile(r"paid|successful|sent|paying", re.I)
 # Lines with a time or a month name are dates ("01:31 am on 22 Nov 2026"), never the amount.
 _DATE_LINE = re.compile(
@@ -72,6 +72,11 @@ _DATE_LINE = re.compile(
 )
 # Standalone number: not part of a date/time/id ("12:30", "22/11/2026", "AB123").
 _AMT_STANDALONE = re.compile(r"(?<![\w.,:/\-])(\d{1,7}(?:,\d{2,3})*(?:\.\d{1,2})?)(?![\w:/\-]|\.\d)")
+# Lines that carry an ID, never the amount. Tesseract often splits a long id like PhonePe's
+# "T2511220410123456789012" into "T2511220410123456 789012", and the tail looked like an amount.
+_ID_LINE = re.compile(
+    r"\b(?:transaction|txn|order|ref(?:erence)?|utr|rrn)\b|[A-Za-z][A-Za-z0-9]*\d{6,}|\d{6,}[A-Za-z]", re.I
+)
 
 
 def _to_amount(s: str) -> float | None:
@@ -82,25 +87,37 @@ def _to_amount(s: str) -> float | None:
     return value if 0 < value < 10_000_000 else None
 
 
-def _find_amount(text: str, utr: str | None) -> float | None:
+def _amount_by_symbol(text: str) -> float | None:
+    """Amount written with ₹ / Rs / INR (or a known misread of ₹). The most trustworthy read."""
     for m in _AMT_SYMBOL.finditer(text):
         amount = _to_amount(m.group(1))
         if amount is not None and len(m.group(1).replace(",", "").split(".")[0]) <= 8:
             return amount
-    # No currency symbol survived OCR: look for a lone number next to "paid/successful/sent".
-    # (A leading '₹' misread as '2' cannot be told apart from a real digit; the matcher then
-    # sees a different amount than the bank and fails safe.)
+    return None
+
+
+def _amount_near_keywords(text: str, utr: str | None) -> float | None:
+    """No currency symbol survived OCR: a lone number next to "paid/successful/sent".
+
+    (A leading '₹' misread as '2' cannot be told apart from a real digit; the matcher then
+    sees a different amount than the bank and fails safe.)
+    """
     lines = text.replace(utr, "").splitlines() if utr else text.splitlines()
     for i, line in enumerate(lines):
         if _AMT_KEYWORD.search(line):
             for near in lines[max(0, i - 2) : i + 3]:
-                if _DATE_LINE.search(near):
+                if _DATE_LINE.search(near) or _ID_LINE.search(near):
                     continue
                 for m in _AMT_STANDALONE.finditer(near):
                     amount = _to_amount(m.group(1))
                     if amount is not None:
                         return amount
     return None
+
+
+def _find_amount(text: str, utr: str | None) -> float | None:
+    amount = _amount_by_symbol(text)
+    return amount if amount is not None else _amount_near_keywords(text, utr)
 
 
 def extract_fields(text: str) -> dict:
@@ -129,6 +146,25 @@ def _preprocess(image_bytes: bytes) -> np.ndarray | None:
     if grey.mean() < 127:  # dark-mode app (light text on dark): Tesseract wants dark text on light
         grey = 255 - grey
     return grey
+
+
+def _amount_from_large_text(image_bytes: bytes) -> float | None:
+    """Second pass for the big headline amount ("₹150"). Only runs when pass 1 found no ₹ amount.
+
+    --psm 6 on the upscaled image treats the page as one uniform block and can drop very large
+    text. Here: a smaller copy (headline ~50 px tall) in sparse-text mode, accepting only an
+    amount with a currency sign, so a stray number can never be taken as the amount.
+    """
+    grey = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_GRAYSCALE)
+    if grey is None:
+        return None
+    if grey.mean() < 127:  # dark mode
+        grey = 255 - grey
+    width = grey.shape[1]
+    if width > 900:
+        grey = cv2.resize(grey, None, fx=900 / width, fy=900 / width, interpolation=cv2.INTER_AREA)
+    text = pytesseract.image_to_string(grey, lang="eng", config="--psm 11")
+    return _amount_by_symbol(text)
 
 
 def _utr_confidence(words: list[tuple[str, float]], utr: str) -> float:
@@ -184,9 +220,16 @@ def analyze_screenshot(image_bytes: bytes) -> OcrResult:
         confidence = _utr_confidence(words, utr)
         if confidence < settings.OCR_MIN_CONF:
             utr = None  # not sure -> don't guess; the matcher asks for a retake
+    # Amount: a ₹-sign read beats everything; if pass 1 has none, try the large-text pass
+    # before falling back to "a number near 'paid'".
+    amount = _amount_by_symbol(text)
+    if amount is None:
+        amount = _amount_from_large_text(image_bytes)
+    if amount is None:
+        amount = _amount_near_keywords(text, fields["utr"])
     return OcrResult(
         utr=utr,
-        amount=fields["amount"],
+        amount=amount,
         confidence=confidence,
         raw_text_len=len(text),
         image_sha256=sha,

@@ -191,3 +191,25 @@ def test_proof_creates_case_and_never_stores_image(client, session):
     case = session.get(Case, body["case_id"])
     assert case.merchant_id == m.id and len(case.image_sha256) == 64 and case.image_phash
     assert case.utr is None
+
+
+def test_split_phonepe_id_tail_is_never_taken_as_the_amount():
+    """Real Tesseract output: the big '₹150' line was dropped and the T-id was split in two.
+    The fallback used to return 789012 (the id's tail). With no trustworthy amount: None."""
+    text = (
+        "Transaction Successful\n"
+        "Paid to Raju Tea Stall\n"
+        "Transaction ID\n"
+        "1T2511220410123456 789012\n"
+        "UTR\n"
+        "953031727959\n"
+        "22 Nov 2026, 04:40 am"
+    )
+    fields = extract_fields(text)
+    assert fields["utr"] == "953031727959"
+    assert fields["amount"] is None
+
+
+def test_rupee_misread_as_less_than_sign():
+    """Tesseract often reads a large '₹' as '<' ('₹150' -> '<150')."""
+    assert extract_fields("Transaction Successful\n<150\nPaid to Raju Tea Stall")["amount"] == 150.0
