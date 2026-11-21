@@ -40,11 +40,13 @@ def _find_used(session, utr):
 
 
 def _is_duplicate_image(session, case):
-    """Same bytes or near-identical pHash as an EARLIER readable case.
+    """Same bytes, or a near-identical pHash WITH the same UTR, as an EARLIER readable case.
 
     Earlier only: otherwise, when the bank SMS arrives, re-evaluating the genuine first case would
     find the later replay upload's identical hash and wrongly fail the genuine payment.
     Unreadable earlier cases (utr None) don't count, so a customer can resend after "retake".
+    pHash needs the same UTR: success screens from one app share a template, so two DIFFERENT
+    customers' receipts measure only 4-6 bits apart. A different UTR is a different payment.
     """
     earlier = session.exec(
         select(Case).where(Case.id != case.id, Case.created_at < case.created_at, Case.utr.is_not(None))
@@ -53,7 +55,7 @@ def _is_duplicate_image(session, case):
     for other in earlier:
         if case.image_sha256 and other.image_sha256 == case.image_sha256:
             return True
-        if mine is not None and other.image_phash:
+        if mine is not None and other.image_phash and other.utr == case.utr:
             try:
                 if mine - imagehash.hex_to_hash(other.image_phash) <= PHASH_MAX_DISTANCE:
                     return True
