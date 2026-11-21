@@ -89,3 +89,56 @@ def test_no_utr_gives_none():
     assert r["utr"] is None
     assert r["amount"] == 99.0
     assert extract_fields("") == {"utr": None, "amount": None}
+
+
+# --- POST /api/proof (validation + happy path) --------------------------------
+
+from io import BytesIO  # noqa: E402
+
+from PIL import Image  # noqa: E402
+
+from app.models import Case, Merchant  # noqa: E402
+
+
+def _png(size=(200, 120), color="white") -> bytes:
+    buf = BytesIO()
+    Image.new("RGB", size, color).save(buf, "PNG")
+    return buf.getvalue()
+
+
+def _post(client, merchant_id, data, ctype="image/png"):
+    return client.post(
+        "/api/proof", data={"merchant_id": merchant_id}, files={"image": ("s.png", data, ctype)}
+    )
+
+
+def test_proof_errors(client, session):
+    m = Merchant(name="Shop")
+    session.add(m)
+    session.commit()
+    assert _post(client, "nope", _png()).status_code == 404
+    assert _post(client, m.id, _png(), "text/plain").status_code == 415
+    assert _post(client, m.id, b"not an image").status_code == 400
+
+
+def test_proof_too_large(client, session, monkeypatch):
+    from app.config import settings
+
+    m = Merchant(name="Shop")
+    session.add(m)
+    session.commit()
+    monkeypatch.setattr(settings, "MAX_UPLOAD_MB", 0)
+    assert _post(client, m.id, _png()).status_code == 413
+
+
+def test_proof_creates_case_and_never_stores_image(client, session):
+    m = Merchant(name="Shop")
+    session.add(m)
+    session.commit()
+    r = _post(client, m.id, _png())  # blank image: no UTR readable
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) == {"case_id", "status", "reason"}
+    case = session.get(Case, body["case_id"])
+    assert case.merchant_id == m.id and len(case.image_sha256) == 64 and case.image_phash
+    assert case.utr is None
