@@ -62,8 +62,11 @@
   .notice { background: var(--amber-bg); color: var(--text); border-radius: 10px; padding: 10px 12px; margin: 10px 0; font-size: .9rem; }
   .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-top: 14px; }
   label { display: block; font-weight: 600; margin: 12px 0 4px; }
-  input { font: inherit; width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+  input, select, textarea { font: inherit; width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
           background: var(--bg); color: var(--text); }
+  textarea { resize: vertical; min-height: 88px; }
+  details.panel summary { cursor: pointer; font-weight: 600; }
+  details.panel[open] summary { margin-bottom: 4px; }
   .qr { display: block; margin: 12px auto; width: min(260px, 100%); image-rendering: pixelated; background: #fff; padding: 8px; border-radius: 8px; }
   code { overflow-wrap: anywhere; }
   [hidden] { display: none !important; }
@@ -95,6 +98,33 @@
       <div class="reason" id="cardReason">Ask the customer to scan your QR and upload their payment screenshot.</div>
       <div class="meta" id="cardMeta"></div>
     </div>
+
+    <!-- Merchant adds the bank's credit SMS by hand (no forwarder app needed) -->
+    <details class="panel" id="pastePanel">
+      <summary id="pasteTitle">➕ Add bank SMS by hand</summary>
+      <label for="pasteBank" id="pasteBankLabel">Bank</label>
+      <select id="pasteBank">
+        <option value="HDFCBK">HDFC Bank</option>
+        <option value="SBIUPI">SBI</option>
+        <option value="ICICIB">ICICI Bank</option>
+        <option value="AXISBK">Axis Bank</option>
+        <option value="KOTAKB">Kotak Mahindra Bank</option>
+        <option value="PNBSMS">Punjab National Bank</option>
+        <option value="BOIIND">Bank of India</option>
+        <option value="UNIONB">Union Bank of India</option>
+        <option value="CANBNK">Canara Bank</option>
+        <option value="IDFCFB">IDFC First Bank</option>
+        <option value="YESBNK">Yes Bank</option>
+        <option value="INDBNK">Indian Bank</option>
+        <option value="PAYTMB">Paytm Payments Bank</option>
+        <option value="AIRBNK">Airtel Payments Bank</option>
+      </select>
+      <label for="pasteBody" id="pasteBodyLabel">Paste the bank's credit SMS</label>
+      <textarea id="pasteBody" maxlength="2000" spellcheck="false"
+        placeholder="Rs.150.00 credited to A/c XX1234 on 22-11-26 by UPI Ref No 123456789012. -HDFC Bank"></textarea>
+      <div class="controls"><button class="primary" id="pasteBtn" type="button">Add SMS</button></div>
+      <p class="notice" id="pasteResult" role="status" hidden></p>
+    </details>
 
     <h2 id="recentTitle">Recent payments</h2>
     <ul class="recent" id="recent"><li class="muted">No payments yet.</li></ul>
@@ -144,6 +174,8 @@ const TEXT = {
     voiceOn: "आवाज़ चालू है", idle: "ग्राहक का इंतज़ार",
     idleReason: "ग्राहक से QR स्कैन करके पेमेंट का स्क्रीनशॉट भेजने को कहें।",
     recent: "हाल के भुगतान", none: "अभी कोई भुगतान नहीं।", record: "रिकॉर्ड देखें",
+    pasteTitle: "➕ बैंक SMS खुद जोड़ें", pasteBank: "बैंक", pasteBody: "बैंक का क्रेडिट SMS यहाँ पेस्ट करें",
+    pasteAdd: "SMS जोड़ें", pasteOk: "बैंक क्रेडिट जुड़ गया",
     noHindi: "इस डिवाइस पर हिंदी आवाज़ नहीं है — अंग्रेज़ी में बोला जाएगा।",
   },
   en: {
@@ -156,6 +188,8 @@ const TEXT = {
     voiceOn: "Voice is on", idle: "Waiting for a customer",
     idleReason: "Ask the customer to scan your QR and upload their payment screenshot.",
     recent: "Recent payments", none: "No payments yet.", record: "View signed record",
+    pasteTitle: "➕ Add bank SMS by hand", pasteBank: "Bank", pasteBody: "Paste the bank's credit SMS",
+    pasteAdd: "Add SMS", pasteOk: "Bank credit added",
     noHindi: "",
   },
 };
@@ -231,6 +265,10 @@ function render() {
   }
 
   $("#recentTitle").textContent = t.recent;
+  $("#pasteTitle").textContent = t.pasteTitle;
+  $("#pasteBankLabel").textContent = t.pasteBank;
+  $("#pasteBodyLabel").textContent = t.pasteBody;
+  $("#pasteBtn").textContent = t.pasteAdd;
   const list = $("#recent");
   const rows = [...cases.values()].sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).slice(0, 10);
   list.replaceChildren();
@@ -324,6 +362,36 @@ function onCase(c) {
   announce(c);
   render();
 }
+
+// ---------- merchant adds a bank SMS by hand ----------
+try { const b = store.get("satyasceau.bank"); if (b) $("#pasteBank").value = b; } catch { /* default bank */ }
+$("#pasteBtn").addEventListener("click", async () => {
+  const body = $("#pasteBody").value.trim();
+  const out = $("#pasteResult"), btn = $("#pasteBtn");
+  if (!body) { $("#pasteBody").focus(); return; }
+  btn.disabled = true;
+  store.set("satyasceau.bank", $("#pasteBank").value);
+  try {
+    const r = await fetch(`/api/merchants/${encodeURIComponent(merchantId)}/bank-sms`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ k: screenKey, bank: $("#pasteBank").value, body }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.accepted) {
+      out.textContent = `✓ ${TEXT[lang].pasteOk}: ${rupees(d.amount)} · UTR ${d.utr}`;
+      $("#pasteBody").value = "";
+      poll();                       // pick up any case it just verified, even if the stream is buffered
+    } else if (r.ok) {
+      out.textContent = d.reason || "Not a bank credit SMS.";
+    } else {
+      out.textContent = r.status === 403 ? "Screen key invalid — open your merchant link again." : `Error ${r.status}`;
+    }
+  } catch {
+    out.textContent = "No connection — try again.";
+  }
+  out.hidden = false;
+  btn.disabled = false;
+});
 
 async function poll() {
   try {

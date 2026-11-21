@@ -4,7 +4,7 @@ from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
 from sqlalchemy import inspect
-from sqlmodel import create_engine
+from sqlmodel import create_engine, select
 from sqlmodel.pool import StaticPool
 
 from app.db import init_db, utcnow
@@ -85,3 +85,36 @@ def test_base_url_is_read_live_from_env_file(tmp_path, monkeypatch, client):
     second = client.post("/api/merchants", json={"name": "B"}).json()
     assert first["pay_url"].startswith("https://first.trycloudflare.com/pay/")
     assert second["pay_url"].startswith("https://second.trycloudflare.com/pay/")
+
+
+# --- merchant pastes a bank SMS by hand ---------------------------------------------
+
+def _paste(client, m, key, body, bank="HDFCBK"):
+    return client.post(f"/api/merchants/{m['id']}/bank-sms", json={"k": key, "bank": bank, "body": body})
+
+
+def test_pasted_bank_sms_verifies_a_waiting_case(client, session):
+    from app.models import BankCredit
+
+    m, key = _new_merchant(client)
+    case = Case(merchant_id=m["id"], utr="431876509123", amount=150.0, image_sha256="img-paste")  # WAITING
+    session.add(case)
+    session.commit()
+    case_id = case.id
+    sms = "Rs.150.00 credited to A/c XX1234 on 22-11-26 by UPI Ref No 431876509123. -HDFC Bank"
+
+    r = _paste(client, m, key, sms)
+    assert r.status_code == 200 and r.json() == {"accepted": True, "utr": "431876509123", "amount": 150.0}
+    assert client.get(f"/api/cases/{case_id}").json()["status"] == "VERIFIED"
+    credit = session.exec(select(BankCredit).where(BankCredit.utr == "431876509123")).first()
+    assert credit.sender_id == "MP-HDFCBK"  # evidence shows it was pasted by hand
+
+
+def test_pasted_sms_needs_key_and_known_bank_and_a_real_credit(client):
+    m, key = _new_merchant(client)
+    sms = "Rs.1.00 credited to A/c XX1234 by UPI Ref No 111122223333. -HDFC Bank"
+    assert _paste(client, m, "", sms).status_code == 403
+    assert _paste(client, m, m["api_token"], sms).status_code == 403
+    assert _paste(client, m, key, sms, bank="FAKEBK").status_code == 422
+    r = _paste(client, m, key, "123456 is your OTP. Do not share. -HDFC")
+    assert r.status_code == 200 and r.json()["accepted"] is False and "12-digit" in r.json()["reason"]

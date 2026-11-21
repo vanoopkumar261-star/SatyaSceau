@@ -12,10 +12,15 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from app import events
+from app import events, ingest
 from app.config import STATIC_DIR, settings
-from app.db import get_session
+from app.db import get_session, utcnow
 from app.models import Case, Merchant
+from app.sms_parser import BANK_CODES
+
+# Sender prefix for SMS the merchant pastes by hand. Kept in BankCredit.sender_id (e.g. "MP-HDFCBK"),
+# so the evidence trail shows the credit was typed in, not forwarded automatically from the bank.
+PASTED_SENDER_PREFIX = "MP"
 
 router = APIRouter()
 
@@ -44,8 +49,12 @@ def _get_merchant(session: Session, merchant_id: str) -> Merchant:
     return merchant
 
 
-def _authorize_screen(session: Session, merchant_id: str, key: str) -> Merchant:
-    """The merchant id is public (printed QR); reading payments needs the screen key."""
+def authorize_screen(session: Session, merchant_id: str, key: str) -> Merchant:
+    """The merchant id is public (printed QR); acting as the merchant needs the screen key.
+
+    Used to read payments, and to add bank credits by hand (pasted SMS, mock bank).
+    Only the shop has the key, so a customer can't feed in a fake credit for their own UTR.
+    """
     merchant = _get_merchant(session, merchant_id)
     expected = merchant.screen_key or ""
     if not expected or not secrets.compare_digest(key.encode(), expected.encode()):
@@ -90,7 +99,7 @@ def list_cases(
     session: Session = Depends(get_session),
 ):
     """Newest cases first: the merchant screen's first load and its polling fallback."""
-    merchant = _authorize_screen(session, merchant_id, k)
+    merchant = authorize_screen(session, merchant_id, k)
     cases = session.exec(
         select(Case)
         .where(Case.merchant_id == merchant_id)
@@ -104,6 +113,33 @@ def list_cases(
     }
 
 
+class BankSmsIn(BaseModel):
+    k: str = ""  # screen key: in the body, never in the URL
+    bank: str = Field(min_length=6, max_length=6)
+    body: str = Field(min_length=1, max_length=2000)
+
+
+@router.post("/api/merchants/{merchant_id}/bank-sms")
+def add_bank_sms(merchant_id: str, payload: BankSmsIn, session: Session = Depends(get_session)):
+    """The merchant pastes a bank credit SMS by hand (no forwarder app needed).
+
+    It goes through the same parser and matcher as forwarded SMS. Pasting is an explicit action,
+    so it isn't gated on the automatic-forwarding consent.
+    """
+    merchant = authorize_screen(session, merchant_id, payload.k)
+    bank = payload.bank.upper()
+    if bank not in BANK_CODES:
+        raise HTTPException(422, "Unknown bank")
+    credit = ingest.ingest_sms(session, merchant, f"{PASTED_SENDER_PREFIX}-{bank}", payload.body, utcnow())
+    if credit is None:
+        return {
+            "accepted": False,
+            "reason": "No bank credit found. The SMS needs the amount (Rs/INR/₹), the 12-digit "
+                      "UPI reference and a word like 'credited' or 'received'.",
+        }
+    return {"accepted": True, "utr": credit.utr, "amount": credit.amount}
+
+
 @router.get("/api/merchants/{merchant_id}/stream")
 async def stream_cases(
     merchant_id: str,
@@ -115,7 +151,7 @@ async def stream_cases(
 
     EventSource can't send headers, so the screen key comes as ?k=.
     """
-    _authorize_screen(session, merchant_id, k)
+    authorize_screen(session, merchant_id, k)
     queue = events.subscribe(merchant_id)
 
     async def event_source():
