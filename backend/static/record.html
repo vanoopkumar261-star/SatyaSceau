@@ -1,14 +1,119 @@
 <!doctype html>
-<!-- Public signed record / certificate (/record/<case_id>). Owner: Pile 3 (Trust).
-     STUB from the scaffold. Spec: docs/WORK_SPLIT.md -> Pile 3, Step 7. -->
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SatyaSceau — Payment record</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>SatyaSceau – Signed payment record</title>
+<style>
+  :root { --bg:#f6f5f1; --card:#fff; --ink:#1d1d1b; --muted:#66655f; --line:#e2dfd7; --ok:#1f7a45; --bad:#b3332b; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#121211; --card:#1c1c1a; --ink:#f1f0ec; --muted:#a3a29c; --line:#2e2e2b; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:640px; margin:0 auto; padding:16px; }
+  .brand { display:flex; gap:10px; align-items:baseline; margin:4px 0 14px; }
+  .brand b { font-size:20px; } .brand span { color:var(--muted); font-size:14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:14px; }
+  .badge { border-radius:12px; padding:18px; text-align:center; color:#fff; background:#666; }
+  .badge.ok { background:var(--ok); } .badge.bad { background:var(--bad); }
+  .badge .v { font-size:26px; font-weight:700; letter-spacing:.5px; }
+  .badge .amt { font-size:40px; font-weight:700; margin-top:4px; }
+  .reason { margin:14px 0 0; font-size:17px; }
+  dl { display:grid; grid-template-columns:max-content 1fr; gap:6px 14px; margin:0; }
+  dt { color:var(--muted); } dd { margin:0; overflow-wrap:anywhere; }
+  .mono { font:13px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace; overflow-wrap:anywhere; word-break:break-all;
+          background:var(--bg); border-radius:8px; padding:8px 10px; margin:4px 0 12px; }
+  h2 { font-size:16px; margin:0 0 8px; }
+  button { font:inherit; padding:11px 18px; border:0; border-radius:10px; background:#2b4c7e; color:#fff; cursor:pointer; }
+  #verify-result { margin-left:10px; font-weight:600; }
+  .muted { color:var(--muted); font-size:14px; }
+  @media print {
+    body { background:#fff; color:#000; } .card { border:1px solid #999; break-inside:avoid; }
+    .badge { -webkit-print-color-adjust:exact; print-color-adjust:exact; } button, .no-print { display:none; }
+  }
+</style>
 </head>
 <body>
-  <h1>SatyaSceau record</h1>
-  <p>Coming soon (Pile 3).</p>
+<main>
+  <header class="brand"><b>SatyaSceau</b><span>Every Payment Gets a Witness</span></header>
+
+  <section class="card" id="loading"><p class="muted">Loading record…</p></section>
+
+  <section id="record" hidden>
+    <div class="card">
+      <div id="badge" class="badge"><div class="v" id="verdict"></div><div class="amt" id="amount"></div></div>
+      <p class="reason" id="reason"></p>
+    </div>
+
+    <div class="card">
+      <dl>
+        <dt>UPI reference (UTR)</dt><dd id="utr"></dd>
+        <dt>Screenshot received</dt><dd id="proof_time"></dd>
+        <dt>Bank credit</dt><dd id="bank_credit_time"></dd>
+        <dt>Decided</dt><dd id="decided_time"></dd>
+        <dt>Case</dt><dd id="case_id"></dd>
+      </dl>
+    </div>
+
+    <div class="card">
+      <h2>Tamper-evidence</h2>
+      <div class="muted">Record SHA-256</div><div class="mono" id="sha"></div>
+      <div class="muted">Ed25519 signature</div><div class="mono" id="sig"></div>
+      <div class="muted">Public key</div><div class="mono" id="pk"></div>
+      <button id="verify">Verify this record</button><span id="verify-result" role="status"></span>
+      <p class="muted no-print">Anyone can check this record with SatyaSceau's public key. Changing any field breaks the signature.</p>
+    </div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const caseId = decodeURIComponent(location.pathname.split("/").filter(Boolean).pop() || "");
+let data = null;
+
+const fmtTime = (iso) => iso ? new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "medium" }) : "—";
+const fmtAmt = (a) => a == null ? "₹ —" : "₹" + Number(a).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+
+async function load() {
+  try {
+    const r = await fetch(`/api/records/${encodeURIComponent(caseId)}`);
+    if (!r.ok) throw new Error(r.status === 404 ? "No signed record for this link." : "Could not load the record.");
+    data = await r.json();
+  } catch (e) {
+    $("loading").querySelector("p").textContent = e.message;
+    return;
+  }
+  const rec = data.record;
+  const ok = rec.verdict === "VERIFIED";
+  $("badge").className = "badge " + (ok ? "ok" : "bad");
+  $("verdict").textContent = ok ? "✅ VERIFIED" : "❌ NOT VERIFIED";
+  $("amount").textContent = fmtAmt(rec.amount);
+  $("reason").textContent = rec.reason || "";
+  $("utr").textContent = rec.utr || "—";
+  $("proof_time").textContent = fmtTime(rec.proof_time);
+  $("bank_credit_time").textContent = fmtTime(rec.bank_credit_time);
+  $("decided_time").textContent = fmtTime(rec.decided_time);
+  $("case_id").textContent = rec.case_id;
+  $("sha").textContent = data.record_sha256;
+  $("sig").textContent = data.signature;
+  $("pk").textContent = data.public_key;
+  $("loading").hidden = true;
+  $("record").hidden = false;
+}
+
+$("verify").addEventListener("click", async () => {
+  $("verify-result").textContent = "Checking…";
+  try {
+    const r = await fetch("/api/records/verify", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ record_json: data.record_json, signature: data.signature }),
+    });
+    $("verify-result").textContent = (await r.json()).valid ? "✅ Valid" : "❌ Invalid";
+  } catch {
+    $("verify-result").textContent = "❌ Could not verify";
+  }
+});
+
+load();
+</script>
 </body>
 </html>
