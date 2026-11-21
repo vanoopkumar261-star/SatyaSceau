@@ -1,0 +1,22 @@
+# Secrets & local data — never commit
+.env
+*.pem
+*.key
+backend/data/
+*.db
+*.db-journal
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

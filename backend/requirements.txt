@@ -1,0 +1,23 @@
+# Python 3.11+.
+# Pure-Python frameworks are pinned EXACTLY so every machine behaves the same
+# (sqlmodel 0.0.50 stores/returns timezone-aware UTC datetimes; older versions don't).
+# Compiled packages use minimum versions so every teammate's Python gets wheels.
+# Tested on Python 3.14.3 with: uvicorn 0.54.0, cryptography 50.0.2, opencv-python-headless 5.1.0.95,
+# numpy 2.5.5, pillow 13.0.0, ImageHash 4.3.2, pytest 9.2.0
+#
+# Windows with Smart App Control ON blocks SQLAlchemy's compiled DLL ("An Application Control policy
+# has blocked this file"). After installing, rebuild it as pure Python (see README "Windows note").
+fastapi==0.165.0
+uvicorn[standard]>=0.30
+sqlmodel==0.0.50
+python-multipart>=0.0.9
+pytesseract>=0.3.10
+pillow>=10.0
+opencv-python-headless>=4.9
+numpy>=1.26
+imagehash>=4.3
+cryptography>=42.0
+python-dotenv>=1.0
+qrcode[pil]>=7.4
+pytest>=8.0
+httpx>=0.27

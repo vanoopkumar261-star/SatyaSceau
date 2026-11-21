@@ -14,7 +14,29 @@ _Coming soon._
 
 ## Setup
 
-_Coming soon._
+**Requirements:** Python 3.11+, [Tesseract OCR](https://github.com/tesseract-ocr/tesseract)
+- Windows: `winget install UB-Mannheim.TesseractOCR`
+- Mac: `brew install tesseract`
+- Linux: `sudo apt install tesseract-ocr`
+
+```bash
+cd backend
+python -m venv .venv
+.venv\Scripts\activate            # Mac/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env              # optional: edit BASE_URL, TESSERACT_CMD, ...
+pytest -q
+uvicorn app.main:app --reload --host 0.0.0.0
+```
+
+Then open http://localhost:8000/docs.
+
+**Windows note:** if `import sqlalchemy` fails with *"An Application Control policy has blocked this file"*, Smart App Control is blocking SQLAlchemy's compiled DLL. Reinstall it as pure Python (keep Smart App Control on):
+
+```bash
+set DISABLE_SQLALCHEMY_CEXT=1     # PowerShell: $env:DISABLE_SQLALCHEMY_CEXT=1
+pip install --force-reinstall --no-deps --no-binary sqlalchemy "sqlalchemy==2.1.9"
+```
 
 ## Team
 
