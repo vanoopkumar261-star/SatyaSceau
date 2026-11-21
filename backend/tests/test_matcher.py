@@ -118,12 +118,20 @@ def test_duplicate_image_rejected_but_genuine_first_case_still_verifies(session,
     assert first.status == CaseStatus.VERIFIED                        # regression: later dup must not fail it
 
 
-def test_near_duplicate_phash_rejected(session, signed):
+def test_near_duplicate_phash_with_same_utr_rejected(session, signed):
+    m = _merchant(session)
+    matcher.evaluate_case(session, _case(session, m, sha="a" * 64, phash="ffffffffffffffff", ago=timedelta(seconds=5)))
+    c = matcher.evaluate_case(session, _case(session, m, sha="b" * 64, phash="fffffffffffffff0"))   # re-photographed copy
+    assert c.reason == matcher.SAME_IMAGE
+
+
+def test_same_template_different_utr_is_not_a_duplicate(session, signed):
+    """Regression: two customers' success screens from one app are 4-6 pHash bits apart."""
     m = _merchant(session)
     matcher.evaluate_case(session, _case(session, m, utr="111111111111", sha="a" * 64,
                                          phash="ffffffffffffffff", ago=timedelta(seconds=5)))
     c = matcher.evaluate_case(session, _case(session, m, utr="222222222222", sha="b" * 64, phash="fffffffffffffff0"))
-    assert c.reason == matcher.SAME_IMAGE
+    assert (c.status, c.reason) == (CaseStatus.WAITING, matcher.WAITING_MSG)
 
 
 def test_resend_after_unreadable_is_not_a_duplicate(session, signed):
