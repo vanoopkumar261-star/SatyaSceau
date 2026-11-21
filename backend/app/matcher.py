@@ -45,6 +45,11 @@ def _is_duplicate_image(session, case):
     Earlier only: otherwise, when the bank SMS arrives, re-evaluating the genuine first case would
     find the later replay upload's identical hash and wrongly fail the genuine payment.
     Unreadable earlier cases (utr None) don't count, so a customer can resend after "retake".
+
+    A near-identical pHash only counts when the UTR is the same too. Two genuine payments to the
+    same shop, same app, same amount differ only in a few digits, so their pHash distance is ~2:
+    without this, the second honest customer got "Same screenshot seen before". A re-saved copy of
+    a reused screenshot keeps its UTR (still caught); an edited UTR never matches a bank credit.
     """
     earlier = session.exec(
         select(Case).where(Case.id != case.id, Case.created_at < case.created_at, Case.utr.is_not(None))
@@ -53,7 +58,7 @@ def _is_duplicate_image(session, case):
     for other in earlier:
         if case.image_sha256 and other.image_sha256 == case.image_sha256:
             return True
-        if mine is not None and other.image_phash:
+        if mine is not None and other.image_phash and other.utr == case.utr:
             try:
                 if mine - imagehash.hex_to_hash(other.image_phash) <= PHASH_MAX_DISTANCE:
                     return True
