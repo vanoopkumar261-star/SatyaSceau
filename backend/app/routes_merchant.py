@@ -119,13 +119,16 @@ async def stream_cases(
     queue = events.subscribe(merchant_id)
 
     async def event_source():
+        # `hello` / `ping` are real events (not SSE comments) so the page can tell a live stream
+        # from one a proxy is silently buffering (Cloudflare quick tunnels do) and fall back to polling.
         try:
             yield "retry: 3000\n\n"
+            yield "event: hello\ndata: {}\n\n"
             while not await request.is_disconnected():
                 try:
                     payload = await asyncio.wait_for(queue.get(), timeout=SSE_KEEPALIVE_S)
                 except asyncio.TimeoutError:
-                    yield ": ping\n\n"
+                    yield "event: ping\ndata: {}\n\n"
                     continue
                 yield f"event: case\ndata: {json.dumps(payload)}\n\n"
         finally:

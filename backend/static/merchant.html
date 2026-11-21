@@ -175,6 +175,10 @@ let windowMin = 5;
 const cases = new Map();          // case_id -> latest payload
 const spoken = new Map();         // case_id -> status already announced
 let es = null, pollTimer = null, wakeLock = null, stopped = false;
+// Stream health. Some proxies (e.g. Cloudflare quick tunnels) accept the SSE connection but buffer
+// its body, so the browser never sees an error. We watch for the server's hello/ping events instead.
+const HELLO_WITHIN_MS = 5000, BEAT_STALE_MS = 35000;
+let lastBeat = 0, connectedAt = 0, streamBlocked = false;
 
 function show(id) { for (const s of ["live", "problem", "setup"]) $("#" + s).hidden = s !== id; }
 function problem(title, text) {
@@ -345,14 +349,39 @@ function startPolling() {
 }
 function stopPolling() { clearInterval(pollTimer); pollTimer = null; }
 
+function beat() {
+  lastBeat = Date.now();
+  if (streamBlocked) return;               // a buffered stream that burst through once is still not live
+  stopPolling();
+  setConn("live", "● Live");
+}
+
 function connect() {
   if (stopped) return;
   if (!("EventSource" in window)) return startPolling();
+  connectedAt = Date.now();
   es = new EventSource(`/api/merchants/${encodeURIComponent(merchantId)}/stream?k=${encodeURIComponent(screenKey)}`);
-  es.addEventListener("case", (e) => onCase(JSON.parse(e.data)));
-  es.onopen = () => { stopPolling(); setConn("live", "● Live"); poll(); };   // catch anything missed while down
-  es.onerror = () => { if (es.readyState === EventSource.CLOSED) { es = null; setTimeout(connect, 5000); } startPolling(); };
+  es.addEventListener("hello", () => { beat(); poll(); });   // poll once to catch anything missed while down
+  es.addEventListener("ping", beat);
+  es.addEventListener("case", (e) => { beat(); onCase(JSON.parse(e.data)); });
+  es.onerror = () => { if (es && es.readyState === EventSource.CLOSED) { es = null; setTimeout(connect, 5000); } startPolling(); };
 }
+
+// Watchdog: no hello within 5 s => the stream is being buffered: poll for the rest of this session.
+// Hello arrived but beats went stale => poll until they come back.
+setInterval(() => {
+  if (stopped || !es) return;
+  const now = Date.now();
+  if (!lastBeat && now - connectedAt > HELLO_WITHIN_MS) {
+    streamBlocked = true;
+    es.close();                              // don't hold a dead connection open on the server
+    es = null;
+    startPolling();
+    setConn("poll", "Polling every 3 s (stream blocked by network)");
+  } else if (lastBeat && now - lastBeat > BEAT_STALE_MS) {
+    startPolling();
+  }
+}, 1000);
 
 // ---------- setup (no merchant id) ----------
 let setupUrl = null;
