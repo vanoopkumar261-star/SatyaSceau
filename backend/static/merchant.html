@@ -1,14 +1,395 @@
 <!doctype html>
-<!-- Merchant live screen + voice verdict (/merchant?m=<merchant_id>). Owner: Pile 1 (Platform).
-     STUB from the scaffold; built on feat/platform. -->
+<!-- Merchant live screen + voice verdict.  /merchant?m=<merchant_id>#k=<screen_key>
+     Owner: Pile 1 (Platform). No external scripts. -->
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SatyaSceau — Merchant</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>SatyaSceau — Merchant</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --text: #111827; --muted: #6b7280; --line: #e5e7eb;
+    --green: #15803d; --green-bg: #dcfce7; --amber: #b45309; --amber-bg: #fef3c7;
+    --red: #b91c1c; --red-bg: #fee2e2; --idle-bg: #eef0f3; --accent: #1d4ed8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0f14; --surface: #121821; --text: #f3f4f6; --muted: #9ca3af; --line: #253041;
+      --green: #4ade80; --green-bg: #0f2a1a; --amber: #fbbf24; --amber-bg: #2d2208;
+      --red: #f87171; --red-bg: #2e1010; --idle-bg: #171e29; --accent: #60a5fa;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Devanagari", sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 16px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 1.15rem; margin: 0; }
+  .shop { color: var(--muted); font-size: .95rem; }
+  .conn { font-size: .8rem; padding: 4px 10px; border-radius: 999px; background: var(--idle-bg); color: var(--muted); }
+  .conn.live { color: var(--green); background: var(--green-bg); }
+  .conn.poll { color: var(--amber); background: var(--amber-bg); }
+  .conn.off { color: var(--red); background: var(--red-bg); }
+  .controls { display: flex; gap: 8px; margin: 14px 0; flex-wrap: wrap; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--surface); color: var(--text);
+           padding: 10px 14px; border-radius: 10px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .card { border-radius: 18px; padding: 28px 22px; text-align: center; background: var(--idle-bg);
+          border: 3px solid transparent; transition: background .2s, border-color .2s; }
+  .card.VERIFIED { background: var(--green-bg); border-color: var(--green); }
+  .card.WAITING { background: var(--amber-bg); border-color: var(--amber); }
+  .card.NOT_VERIFIED { background: var(--red-bg); border-color: var(--red); }
+  .card .icon { font-size: 3.5rem; line-height: 1; }
+  .card .label { font-size: clamp(1.6rem, 6vw, 2.4rem); font-weight: 800; margin: 10px 0 4px; }
+  .card.VERIFIED .label { color: var(--green); }
+  .card.WAITING .label { color: var(--amber); }
+  .card.NOT_VERIFIED .label { color: var(--red); }
+  .card .amount { font-size: clamp(2rem, 9vw, 3.4rem); font-weight: 800; font-variant-numeric: tabular-nums; }
+  .card .reason { font-size: 1.05rem; margin: 8px 0; }
+  .card .meta { color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+  .card a { color: var(--accent); font-weight: 600; }
+  h2 { font-size: .95rem; color: var(--muted); margin: 22px 0 8px; font-weight: 600; }
+  ul.recent { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  ul.recent li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--line); }
+  ul.recent li:first-child { border-top: 0; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--muted); }
+  .dot.VERIFIED { background: var(--green); } .dot.WAITING { background: var(--amber); } .dot.NOT_VERIFIED { background: var(--red); }
+  .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .num { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .muted { color: var(--muted); font-size: .85rem; }
+  .notice { background: var(--amber-bg); color: var(--text); border-radius: 10px; padding: 10px 12px; margin: 10px 0; font-size: .9rem; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-top: 14px; }
+  label { display: block; font-weight: 600; margin: 12px 0 4px; }
+  input { font: inherit; width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+          background: var(--bg); color: var(--text); }
+  .qr { display: block; margin: 12px auto; width: min(260px, 100%); image-rendering: pixelated; background: #fff; padding: 8px; border-radius: 8px; }
+  code { overflow-wrap: anywhere; }
+  [hidden] { display: none !important; }
+</style>
 </head>
 <body>
-  <h1>SatyaSceau merchant screen</h1>
-  <p>Coming soon (Pile 1).</p>
+<main>
+  <header>
+    <div>
+      <h1>SatyaSceau</h1>
+      <div class="shop" id="shop">Merchant screen</div>
+    </div>
+    <span class="conn" id="conn">Connecting…</span>
+  </header>
+
+  <!-- Live screen -->
+  <section id="live" hidden>
+    <div class="controls">
+      <button class="primary" id="voiceBtn" type="button">🔊 Start listening</button>
+      <button type="button" data-lang="hi" aria-pressed="true">हिंदी</button>
+      <button type="button" data-lang="en" aria-pressed="false">English</button>
+    </div>
+    <div class="notice" id="voiceNote" hidden></div>
+
+    <div class="card" id="card" aria-live="polite">
+      <div class="icon" id="cardIcon">⌛</div>
+      <div class="label" id="cardLabel">Waiting for a customer</div>
+      <div class="amount" id="cardAmount"></div>
+      <div class="reason" id="cardReason">Ask the customer to scan your QR and upload their payment screenshot.</div>
+      <div class="meta" id="cardMeta"></div>
+    </div>
+
+    <h2 id="recentTitle">Recent payments</h2>
+    <ul class="recent" id="recent"><li class="muted">No payments yet.</li></ul>
+  </section>
+
+  <!-- Problems -->
+  <section id="problem" class="panel" hidden>
+    <strong id="problemTitle"></strong>
+    <p class="muted" id="problemText"></p>
+  </section>
+
+  <!-- New shop setup (no ?m=) -->
+  <section id="setup" class="panel" hidden>
+    <strong>Set up a shop</strong>
+    <p class="muted">Already registered? Open the merchant link you got at sign-up.</p>
+    <form id="setupForm">
+      <label for="shopName">Shop name</label>
+      <input id="shopName" required maxlength="80" placeholder="Raju Tea Stall">
+      <label for="shopUpi">UPI ID (shown to customers, optional)</label>
+      <input id="shopUpi" maxlength="80" placeholder="raju@okaxis">
+      <div class="controls"><button class="primary" type="submit">Create shop</button></div>
+      <p class="notice" id="setupErr" hidden></p>
+    </form>
+    <div id="setupDone" hidden>
+      <p><strong>Print this QR</strong> and keep it at the counter.</p>
+      <img class="qr" id="setupQr" alt="QR code for customers to upload their payment screenshot">
+      <p class="muted">Customer link: <code id="setupPay"></code></p>
+      <p class="muted">SMS forwarder token (shown once, keep it secret): <code id="setupToken"></code></p>
+      <div class="controls"><button class="primary" id="openLive" type="button">Open live screen</button></div>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = (sel) => document.querySelector(sel);
+
+// Every string the screen shows or speaks, per language.
+const TEXT = {
+  hi: {
+    VERIFIED: "भुगतान सत्यापित", WAITING: "बैंक का इंतज़ार", NOT_VERIFIED: "भुगतान सत्यापित नहीं",
+    say: {
+      VERIFIED: (amt) => (amt ? `${amt} रुपये का ` : "") + "भुगतान सत्यापित हुआ",
+      WAITING: () => "बैंक का इंतज़ार है, ग्राहक को रोकें",
+      NOT_VERIFIED: () => "भुगतान सत्यापित नहीं हुआ",
+    },
+    voiceOn: "आवाज़ चालू है", idle: "ग्राहक का इंतज़ार",
+    idleReason: "ग्राहक से QR स्कैन करके पेमेंट का स्क्रीनशॉट भेजने को कहें।",
+    recent: "हाल के भुगतान", none: "अभी कोई भुगतान नहीं।", record: "रिकॉर्ड देखें",
+    noHindi: "इस डिवाइस पर हिंदी आवाज़ नहीं है — अंग्रेज़ी में बोला जाएगा।",
+  },
+  en: {
+    VERIFIED: "Payment verified", WAITING: "Waiting for bank", NOT_VERIFIED: "Not verified",
+    say: {
+      VERIFIED: (amt) => "Payment verified" + (amt ? `. ${amt} rupees received.` : "."),
+      WAITING: () => "Waiting for the bank. Please ask the customer to wait.",
+      NOT_VERIFIED: () => "Payment not verified. Do not hand over the goods.",
+    },
+    voiceOn: "Voice is on", idle: "Waiting for a customer",
+    idleReason: "Ask the customer to scan your QR and upload their payment screenshot.",
+    recent: "Recent payments", none: "No payments yet.", record: "View signed record",
+    noHindi: "",
+  },
+};
+const ICON = { VERIFIED: "✅", WAITING: "⏳", NOT_VERIFIED: "❌" };
+
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode: fine */ } },
+};
+
+const params = new URLSearchParams(location.search);
+const merchantId = params.get("m");
+let screenKey = null;
+let lang = store.get("satyasceau.lang") === "en" ? "en" : "hi";
+let voiceOn = false;
+let windowMin = 5;
+const cases = new Map();          // case_id -> latest payload
+const spoken = new Map();         // case_id -> status already announced
+let es = null, pollTimer = null, wakeLock = null, stopped = false;
+
+function show(id) { for (const s of ["live", "problem", "setup"]) $("#" + s).hidden = s !== id; }
+function problem(title, text) {
+  stopped = true;                // bad link: stop polling/reconnecting for good
+  stopPolling();
+  if (es) { es.close(); es = null; }
+  $("#problemTitle").textContent = title; $("#problemText").textContent = text;
+  show("problem"); setConn("off", "Stopped");
+  return "fatal";
+}
+function setConn(cls, label) { const c = $("#conn"); c.className = "conn " + cls; c.textContent = label; }
+function rupees(n) { return n == null ? "" : "₹" + Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function plainAmount(n) { return n == null ? "" : String(Number.isInteger(n) ? n : Number(n).toFixed(2)); }
+function time(iso) { return iso ? new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" }) : ""; }
+
+// ---------- rendering ----------
+// Card = case with the latest ACTIVITY, not the latest upload: an older case that just turned
+// VERIFIED must beat a newer duplicate that was rejected seconds earlier.
+const activity = (c) => c.decided_at || c.created_at;
+function newest() {
+  let best = null;
+  for (const c of cases.values()) if (!best || activity(c) > activity(best)) best = c;
+  return best;
+}
+
+function render() {
+  const t = TEXT[lang];
+  const c = newest();
+  const card = $("#card");
+  card.className = "card" + (c ? " " + c.status : "");
+  $("#cardIcon").textContent = c ? ICON[c.status] : "⌛";
+  $("#cardLabel").textContent = c ? t[c.status] : t.idle;
+  $("#cardAmount").textContent = c ? rupees(c.amount) : "";
+  $("#cardReason").textContent = c ? c.reason : t.idleReason;
+
+  const meta = $("#cardMeta");
+  meta.replaceChildren();
+  if (c) {
+    const bits = [];
+    if (c.utr) bits.push("UTR " + c.utr);
+    bits.push(time(c.created_at));
+    if (c.status === "WAITING") bits.push(waitingClock(c));
+    meta.append(bits.join(" · "));
+    if (c.record_url) {
+      meta.append(document.createElement("br"));
+      const a = document.createElement("a");
+      a.href = c.record_url; a.target = "_blank"; a.rel = "noopener"; a.textContent = t.record;
+      meta.append(a);
+    }
+  }
+
+  $("#recentTitle").textContent = t.recent;
+  const list = $("#recent");
+  const rows = [...cases.values()].sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).slice(0, 10);
+  list.replaceChildren();
+  if (!rows.length) {
+    const li = document.createElement("li"); li.className = "muted"; li.textContent = t.none; list.append(li);
+  }
+  for (const r of rows) {
+    const li = document.createElement("li");
+    const dot = document.createElement("span"); dot.className = "dot " + r.status;
+    const label = document.createElement("span"); label.className = "grow"; label.textContent = t[r.status] + (r.utr ? " · " + r.utr : "");
+    const amt = document.createElement("span"); amt.className = "num"; amt.textContent = rupees(r.amount);
+    const when = document.createElement("span"); when.className = "muted"; when.textContent = time(r.created_at);
+    li.append(dot, label, amt, when);
+    list.append(li);
+  }
+}
+
+function waitingClock(c) {
+  const secs = Math.max(0, Math.floor((Date.now() - new Date(c.created_at)) / 1000));
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  return `${fmt(Math.min(secs, windowMin * 60))} / ${fmt(windowMin * 60)}`;
+}
+setInterval(() => { const c = newest(); if (c && c.status === "WAITING") render(); }, 1000);
+
+// ---------- voice ----------
+function pickVoice(code) {
+  const voices = speechSynthesis.getVoices();
+  return voices.find((v) => v.lang === code) || voices.find((v) => v.lang.toLowerCase().startsWith(code.slice(0, 2)));
+}
+
+function say(text, code) {
+  if (!("speechSynthesis" in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = code;
+  const v = pickVoice(code);
+  if (v) u.voice = v;
+  u.rate = 0.95;
+  speechSynthesis.cancel();      // newest verdict wins; never queue stale ones
+  speechSynthesis.speak(u);
+}
+
+function announce(c) {
+  if (!voiceOn || spoken.get(c.case_id) === c.status) return;
+  spoken.set(c.case_id, c.status);
+  const useHindi = lang === "hi" && pickVoice("hi-IN");
+  const t = TEXT[useHindi ? "hi" : "en"];
+  say(t.say[c.status](plainAmount(c.amount)), useHindi ? "hi-IN" : "en-IN");
+  if (c.status === "NOT_VERIFIED" && navigator.vibrate) navigator.vibrate([200, 100, 200]);
+}
+
+function updateVoiceNote() {
+  const note = $("#voiceNote");
+  const missingHindi = voiceOn && lang === "hi" && "speechSynthesis" in window && !pickVoice("hi-IN");
+  note.textContent = missingHindi ? TEXT.hi.noHindi : "";
+  note.hidden = !missingHindi;
+}
+
+async function keepScreenOn() {
+  try { if ("wakeLock" in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); } } catch { /* optional */ }
+}
+document.addEventListener("visibilitychange", () => { if (voiceOn && document.visibilityState === "visible") keepScreenOn(); });
+
+$("#voiceBtn").addEventListener("click", () => {
+  if (!("speechSynthesis" in window)) { $("#voiceNote").textContent = "This browser has no speech support."; $("#voiceNote").hidden = false; return; }
+  voiceOn = true;                // the tap itself unlocks audio on mobile browsers
+  for (const c of cases.values()) spoken.set(c.case_id, c.status);   // don't replay history
+  const useHindi = lang === "hi" && pickVoice("hi-IN");
+  say(TEXT[useHindi ? "hi" : "en"].voiceOn, useHindi ? "hi-IN" : "en-IN");
+  $("#voiceBtn").textContent = "🔊 " + TEXT[lang].voiceOn;
+  $("#voiceBtn").classList.remove("primary");
+  updateVoiceNote();
+  keepScreenOn();
+});
+
+for (const b of document.querySelectorAll("[data-lang]")) {
+  b.addEventListener("click", () => {
+    lang = b.dataset.lang;
+    store.set("satyasceau.lang", lang);
+    for (const o of document.querySelectorAll("[data-lang]")) o.setAttribute("aria-pressed", String(o === b));
+    if (voiceOn) $("#voiceBtn").textContent = "🔊 " + TEXT[lang].voiceOn;
+    updateVoiceNote();
+    render();
+  });
+  b.setAttribute("aria-pressed", String(b.dataset.lang === lang));
+}
+if ("speechSynthesis" in window) speechSynthesis.addEventListener?.("voiceschanged", updateVoiceNote);
+
+// ---------- data ----------
+function onCase(c) {
+  cases.set(c.case_id, c);
+  announce(c);
+  render();
+}
+
+async function poll() {
+  try {
+    const r = await fetch(`/api/merchants/${encodeURIComponent(merchantId)}/cases?k=${encodeURIComponent(screenKey)}`, { cache: "no-store" });
+    if (r.status === 403) return problem("Invalid screen link", "This link's key is wrong or old. Open the merchant link you got at sign-up.");
+    if (r.status === 404) return problem("Shop not found", "Check the merchant link.");
+    if (!r.ok) throw new Error(r.status);
+    const data = await r.json();
+    windowMin = data.match_window_min || windowMin;
+    $("#shop").textContent = data.merchant.name;
+    for (const c of data.cases.reverse()) onCase(c);
+    return true;
+  } catch {
+    setConn("off", "Offline — retrying");
+    return false;
+  }
+}
+
+function startPolling() {
+  if (stopped) return;
+  if (!pollTimer) pollTimer = setInterval(poll, 3000);
+  setConn("poll", "Polling every 3 s");
+}
+function stopPolling() { clearInterval(pollTimer); pollTimer = null; }
+
+function connect() {
+  if (stopped) return;
+  if (!("EventSource" in window)) return startPolling();
+  es = new EventSource(`/api/merchants/${encodeURIComponent(merchantId)}/stream?k=${encodeURIComponent(screenKey)}`);
+  es.addEventListener("case", (e) => onCase(JSON.parse(e.data)));
+  es.onopen = () => { stopPolling(); setConn("live", "● Live"); poll(); };   // catch anything missed while down
+  es.onerror = () => { if (es.readyState === EventSource.CLOSED) { es = null; setTimeout(connect, 5000); } startPolling(); };
+}
+
+// ---------- setup (no merchant id) ----------
+let setupUrl = null;
+$("#setupForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const r = await fetch("/api/merchants", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: $("#shopName").value.trim(), upi_id: $("#shopUpi").value.trim() }),
+  });
+  if (!r.ok) { $("#setupErr").textContent = "Could not create the shop. Check the name and try again."; $("#setupErr").hidden = false; return; }
+  const m = await r.json();
+  $("#setupQr").src = "data:image/png;base64," + m.qr_png_base64;
+  $("#setupPay").textContent = m.pay_url;
+  $("#setupToken").textContent = m.api_token;
+  setupUrl = new URL(m.merchant_url, location.origin);
+  setupUrl = location.origin + setupUrl.pathname + setupUrl.search + setupUrl.hash;  // stay on this host
+  $("#setupForm").hidden = true;
+  $("#setupDone").hidden = false;
+});
+$("#openLive").addEventListener("click", () => location.assign(setupUrl));   // new ?m= => real navigation
+
+// ---------- start ----------
+(async function start() {
+  if (!merchantId) { show("setup"); setConn("", "Setup"); return; }
+  const fromHash = new URLSearchParams(location.hash.slice(1)).get("k");
+  if (fromHash) {
+    store.set("satyasceau.key." + merchantId, fromHash);
+    history.replaceState(null, "", location.pathname + location.search);   // keep the key out of screenshots
+  }
+  screenKey = fromHash || store.get("satyasceau.key." + merchantId);
+  if (!screenKey) return problem("Screen key missing", "Open the full merchant link you got at sign-up (it ends with #k=…).");
+  show("live");
+  render();
+  const first = await poll();
+  if (first === true) connect();
+  else if (first === false) startPolling();   // "fatal" = bad link, already shown
+})();
+</script>
 </body>
 </html>

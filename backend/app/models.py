@@ -31,6 +31,9 @@ class Merchant(SQLModel, table=True):
     name: str
     upi_id: str = ""
     api_token: str = Field(default_factory=lambda: new_id(24), unique=True, index=True)
+    # Read-only key for the merchant's live screen. Separate from api_token (which can inject SMS)
+    # because it travels in a browser URL. The merchant id alone is public: it's on the printed QR.
+    screen_key: Optional[str] = Field(default_factory=lambda: new_id(16))
     consent_given: bool = False
     consent_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=utcnow)

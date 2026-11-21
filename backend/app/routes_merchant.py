@@ -4,12 +4,13 @@ import asyncio
 import base64
 import io
 import json
+import secrets
 
 import qrcode
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app import events
 from app.config import STATIC_DIR, settings
@@ -43,6 +44,15 @@ def _get_merchant(session: Session, merchant_id: str) -> Merchant:
     return merchant
 
 
+def _authorize_screen(session: Session, merchant_id: str, key: str) -> Merchant:
+    """The merchant id is public (printed QR); reading payments needs the screen key."""
+    merchant = _get_merchant(session, merchant_id)
+    expected = merchant.screen_key or ""
+    if not expected or not secrets.compare_digest(key.encode(), expected.encode()):
+        raise HTTPException(403, "Invalid screen key")
+    return merchant
+
+
 @router.get("/health")
 def health():
     return {"status": "ok", "version": settings.APP_VERSION}
@@ -60,7 +70,8 @@ def create_merchant(body: MerchantIn, session: Session = Depends(get_session)):
         "name": merchant.name,
         "api_token": merchant.api_token,  # shown once: goes into the SMS forwarder
         "pay_url": pay_url,
-        "merchant_url": f"{settings.BASE_URL}/merchant?m={merchant.id}",
+        # key in the #fragment: browsers never send it in the page request
+        "merchant_url": f"{settings.BASE_URL}/merchant?m={merchant.id}#k={merchant.screen_key}",
         "qr_png_base64": base64.b64encode(_qr_png(pay_url)).decode(),
     }
 
@@ -71,10 +82,40 @@ def merchant_qr(merchant_id: str, session: Session = Depends(get_session)):
     return Response(_qr_png(_pay_url(merchant_id)), media_type="image/png")
 
 
+@router.get("/api/merchants/{merchant_id}/cases")
+def list_cases(
+    merchant_id: str,
+    k: str = Query(default="", description="screen key"),
+    limit: int = Query(default=10, ge=1, le=50),
+    session: Session = Depends(get_session),
+):
+    """Newest cases first: the merchant screen's first load and its polling fallback."""
+    merchant = _authorize_screen(session, merchant_id, k)
+    cases = session.exec(
+        select(Case)
+        .where(Case.merchant_id == merchant_id)
+        .order_by(Case.created_at.desc())
+        .limit(limit)
+    ).all()
+    return {
+        "merchant": {"id": merchant.id, "name": merchant.name},
+        "match_window_min": settings.MATCH_WINDOW_MIN,
+        "cases": [events.case_payload(c) for c in cases],
+    }
+
+
 @router.get("/api/merchants/{merchant_id}/stream")
-async def stream_cases(merchant_id: str, request: Request, session: Session = Depends(get_session)):
-    """Server-Sent Events: one `case` event per status change for this merchant."""
-    _get_merchant(session, merchant_id)
+async def stream_cases(
+    merchant_id: str,
+    request: Request,
+    k: str = Query(default="", description="screen key"),
+    session: Session = Depends(get_session),
+):
+    """Server-Sent Events: one `case` event per status change for this merchant.
+
+    EventSource can't send headers, so the screen key comes as ?k=.
+    """
+    _authorize_screen(session, merchant_id, k)
     queue = events.subscribe(merchant_id)
 
     async def event_source():
