@@ -1,14 +1,75 @@
 <!doctype html>
 <!-- DEMO BACKUP — simulated bank SMS. Owner: Pile 2 (Privacy & Mock bank).
-     STUB from the scaffold. Spec: docs/WORK_SPLIT.md -> Pile 2, Step 6. -->
+     Spec: docs/WORK_SPLIT.md -> Pile 2, Step 6. No external scripts. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SatyaSceau — Mock bank (demo backup)</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+           background: #f4f6f8; color: #1a2330; }
+    .banner { background: #c62828; color: #fff; text-align: center; font-weight: 800;
+              letter-spacing: .5px; padding: 14px 12px; font-size: 1.05rem; }
+    main { max-width: 420px; margin: 0 auto; padding: 20px 16px; }
+    label { display: block; margin: 14px 0 6px; font-weight: 600; }
+    input { width: 100%; padding: 14px; font-size: 1.05rem; border: 1px solid #b8c2d0; border-radius: 10px; }
+    button { width: 100%; margin-top: 20px; padding: 16px; font-size: 1.1rem; font-weight: 700;
+             color: #fff; background: #c62828; border: 0; border-radius: 12px; cursor: pointer; }
+    button[disabled] { background: #9aa4b2; }
+    #result { margin-top: 18px; padding: 14px; border-radius: 10px; font-weight: 600; }
+    .ok { background: #d9f5e1; color: #11632a; }
+    .no { background: #fff4d6; color: #7a5600; }
+    .err { background: #fde0e0; color: #8a1c1c; }
+    .hidden { display: none; }
+    p.note { color: #5b6776; font-size: .9rem; }
+  </style>
 </head>
 <body>
-  <h1>DEMO BACKUP — simulated bank SMS</h1>
-  <p>Coming soon (Pile 2).</p>
+  <div class="banner">DEMO BACKUP — simulated bank SMS</div>
+  <main>
+    <p class="note">Pretends the merchant's bank sent a credit SMS (sender AX-HDFCBK).
+       Use only if the real SMS forwarder is not working.</p>
+    <form id="form">
+      <label for="merchant">Merchant ID</label>
+      <input id="merchant" required autocomplete="off">
+      <label for="utr">UTR (12 digits)</label>
+      <input id="utr" required inputmode="numeric" pattern="[0-9]{12}" maxlength="12" autocomplete="off">
+      <label for="amount">Amount (₹)</label>
+      <input id="amount" required type="number" step="0.01" min="0.01" inputmode="decimal">
+      <button id="send" type="submit">Send simulated bank SMS</button>
+    </form>
+    <div id="result" class="hidden" role="status"></div>
+  </main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var q = new URLSearchParams(location.search).get("m");
+  if (q) $("merchant").value = q;
+
+  $("form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var btn = $("send"), out = $("result");
+    btn.disabled = true;
+    fetch("/api/mock-bank", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ merchant_id: $("merchant").value.trim(), utr: $("utr").value.trim(),
+                             amount: parseFloat($("amount").value) })
+    })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (b) { return { code: r.status, body: b }; }); })
+      .then(function (res) {
+        out.classList.remove("hidden", "ok", "no", "err");
+        if (res.code === 200 && res.body.accepted) { out.classList.add("ok"); out.textContent = "Accepted ✓ — bank credit stored."; }
+        else if (res.code === 200) { out.classList.add("no"); out.textContent = "Rejected — the SMS was not accepted as a bank credit."; }
+        else if (res.code === 404) { out.classList.add("err"); out.textContent = "Unknown merchant ID."; }
+        else { out.classList.add("err"); out.textContent = "Error " + res.code + ". Check the fields."; }
+      })
+      .catch(function () { out.classList.remove("hidden", "ok", "no"); out.classList.add("err"); out.textContent = "No connection."; })
+      .then(function () { btn.disabled = false; });
+  });
+})();
+</script>
 </body>
 </html>

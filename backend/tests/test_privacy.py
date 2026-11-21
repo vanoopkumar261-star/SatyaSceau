@@ -63,3 +63,35 @@ def test_consent_endpoint_auth(client, session):
     assert r.status_code == 200 and r.json() == {"consent_given": True}
     r = client.post(url, json={"given": False}, headers={"X-Token": m.api_token})
     assert r.json() == {"consent_given": False}
+
+
+# --- mock bank (demo backup) ---------------------------------------------------
+
+
+def test_mock_bank_sends_the_agreed_demo_sms(client, session, monkeypatch):
+    from app import ingest
+
+    m = _merchant(session)
+    seen = {}
+
+    def fake_ingest(sess, merchant, sender, body, received_at):
+        seen.update(merchant=merchant.id, sender=sender, body=body)
+        return BankCredit(merchant_id=merchant.id, utr="x", amount=1, credited_at=received_at, sender_id=sender)
+
+    monkeypatch.setattr(ingest, "ingest_sms", fake_ingest)
+    r = client.post("/api/mock-bank", json={"merchant_id": m.id, "utr": "412345678901", "amount": 1250})
+    assert r.status_code == 200 and r.json() == {"accepted": True}
+    assert seen["sender"] == "AX-HDFCBK" and seen["merchant"] == m.id
+    assert seen["body"].startswith("Rs.1250.00 credited to A/c XX1234 on ")
+    assert seen["body"].endswith(" by UPI Ref No 412345678901. -HDFC Bank")
+
+
+def test_mock_bank_not_accepted_and_unknown_merchant(client, session, monkeypatch):
+    from app import ingest
+
+    m = _merchant(session)
+    monkeypatch.setattr(ingest, "ingest_sms", lambda *a, **k: None)
+    r = client.post("/api/mock-bank", json={"merchant_id": m.id, "utr": "1", "amount": 5})
+    assert r.json() == {"accepted": False}
+    assert client.post("/api/mock-bank", json={"merchant_id": "nope", "utr": "1", "amount": 5}).status_code == 404
+    assert client.get("/mock-bank").status_code == 200

@@ -12,8 +12,8 @@ from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.config import STATIC_DIR
-from app import privacy
-from app.db import get_session
+from app import ingest, privacy
+from app.db import get_session, utcnow
 from app.models import Merchant
 
 router = APIRouter()
@@ -54,4 +54,14 @@ def mock_bank_page():
 @router.post("/api/mock-bank")
 def mock_bank_credit(body: MockSmsIn, session: Session = Depends(get_session)):
     """DEMO BACKUP: build the agreed demo SMS and call ingest.ingest_sms. Returns {"accepted": bool}."""
-    raise HTTPException(501, "Not implemented yet (Pile 2: Mock bank)")
+    merchant = session.get(Merchant, body.merchant_id)
+    if merchant is None:
+        raise HTTPException(404, "merchant not found")
+    sender = "AX-HDFCBK"
+    now = utcnow()
+    sms = (
+        f"Rs.{body.amount:.2f} credited to A/c XX1234 on {now:%d-%m-%y} "
+        f"by UPI Ref No {body.utr}. -HDFC Bank"
+    )
+    credit = ingest.ingest_sms(session, merchant, sender, sms, now)
+    return {"accepted": credit is not None}
