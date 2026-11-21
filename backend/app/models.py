@@ -34,6 +34,9 @@ class Merchant(SQLModel, table=True):
     # Read-only key for the merchant's live screen. Separate from api_token (which can inject SMS)
     # because it travels in a browser URL. The merchant id alone is public: it's on the printed QR.
     screen_key: Optional[str] = Field(default_factory=lambda: new_id(16))
+    # Supabase Auth user who owns this shop (one shop per account). None for seeded/demo shops.
+    owner_user_id: Optional[str] = Field(default=None, index=True)
+    account_type: Optional[str] = None  # "personal" (bank SMS, live) | "company" (Razorpay: next phase)
     consent_given: bool = False
     consent_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=utcnow)

@@ -1,0 +1,249 @@
+<!doctype html>
+<!-- Register / log in (Supabase Auth), choose Personal UPI or Company, set up the shop, open the
+     live merchant screen.  /login   Owner: Pile 1 (Platform). No external scripts. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>SatyaSceau — Sign in</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --text: #111827; --muted: #6b7280; --line: #e5e7eb;
+    --accent: #1d4ed8; --accent-text: #ffffff; --ok: #15803d; --ok-bg: #dcfce7; --warn-bg: #fef3c7; --err: #b91c1c; --err-bg: #fee2e2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0f14; --surface: #121821; --text: #f3f4f6; --muted: #9ca3af; --line: #253041;
+      --accent: #60a5fa; --accent-text: #0b0f14; --ok: #4ade80; --ok-bg: #0f2a1a; --warn-bg: #2d2208; --err: #f87171; --err-bg: #2e1010;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Devanagari", sans-serif; }
+  main { max-width: 460px; margin: 0 auto; padding: 24px 16px 40px; }
+  .brand { text-align: center; margin-bottom: 18px; }
+  .brand h1 { margin: 0; font-size: 1.6rem; }
+  .brand p { margin: 4px 0 0; color: var(--muted); }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--bg); padding: 4px; border-radius: 12px; margin-bottom: 14px; }
+  .tabs button { border: 0; background: none; color: var(--muted); padding: 10px; border-radius: 9px; font: inherit; font-weight: 600; cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  label { display: block; font-weight: 600; margin: 12px 0 4px; }
+  input[type=email], input[type=password], input[type=text] { font: inherit; width: 100%; padding: 12px; border-radius: 10px;
+         border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .primary { width: 100%; margin-top: 16px; padding: 13px; font: inherit; font-weight: 700; border: 0; border-radius: 12px;
+             background: var(--accent); color: var(--accent-text); cursor: pointer; }
+  .primary[disabled] { opacity: .55; cursor: default; }
+  .link { background: none; border: 0; color: var(--accent); font: inherit; cursor: pointer; padding: 6px; }
+  .msg { border-radius: 10px; padding: 10px 12px; margin-top: 12px; font-size: .92rem; }
+  .msg.err { background: var(--err-bg); color: var(--err); } .msg.warn { background: var(--warn-bg); }
+  .types { display: grid; gap: 10px; margin-top: 6px; }
+  .type { display: flex; gap: 12px; align-items: flex-start; border: 2px solid var(--line); border-radius: 14px; padding: 14px; cursor: pointer; }
+  .type:has(input:checked) { border-color: var(--accent); }
+  .type input { margin-top: 4px; }
+  .type b { display: block; } .type small { color: var(--muted); }
+  .badge { display: inline-block; font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
+  .badge.live { background: var(--ok-bg); color: var(--ok); } .badge.soon { background: var(--warn-bg); }
+  .check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; margin-top: 14px; }
+  .check input { margin-top: 4px; }
+  .qr { display: block; margin: 14px auto 6px; width: min(240px, 100%); image-rendering: pixelated; background: #fff; padding: 8px; border-radius: 10px; }
+  .muted { color: var(--muted); font-size: .88rem; }
+  code { overflow-wrap: anywhere; font-size: .85rem; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  h2 { font-size: 1.15rem; margin: 0 0 4px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">
+    <h1>SatyaSceau</h1>
+    <p>Every payment gets a witness.</p>
+  </div>
+
+  <!-- 1. Log in / Register -->
+  <section class="panel" id="authView" hidden>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="tabLogin" aria-selected="true">Log in</button>
+      <button type="button" role="tab" id="tabRegister" aria-selected="false">Register</button>
+    </div>
+    <form id="authForm" autocomplete="on">
+      <label for="email">Email</label>
+      <input id="email" type="email" required autocomplete="email" maxlength="254">
+      <label for="password">Password</label>
+      <input id="password" type="password" required minlength="6" maxlength="72" autocomplete="current-password">
+      <button class="primary" id="authBtn" type="submit">Log in</button>
+    </form>
+    <div class="msg" id="authMsg" role="alert" hidden></div>
+  </section>
+
+  <!-- 2. First-time setup: account type + shop -->
+  <section class="panel" id="setupView" hidden>
+    <h2>Set up your account</h2>
+    <p class="muted" id="setupWho"></p>
+    <form id="shopForm">
+      <label>How do you receive payments?</label>
+      <div class="types">
+        <label class="type"><input type="radio" name="atype" value="personal" checked>
+          <span><b>Personal UPI <span class="badge live">Live</span></b>
+          <small>Your own UPI ID. We check each payment against your bank's credit SMS.</small></span></label>
+        <label class="type"><input type="radio" name="atype" value="company">
+          <span><b>Company / business <span class="badge soon">Coming next</span></b>
+          <small>Payment-gateway QR with signed webhooks (Razorpay). Until then your shop verifies with bank SMS.</small></span></label>
+      </div>
+      <label for="shopName">Shop or business name</label>
+      <input id="shopName" type="text" required maxlength="80" placeholder="Raju Tea Stall">
+      <label for="shopUpi">UPI ID <span class="muted">(optional, shown to customers)</span></label>
+      <input id="shopUpi" type="text" maxlength="80" placeholder="raju@okaxis">
+      <label class="check"><input type="checkbox" id="consent">
+        <span>Forward my bank's <b>credit</b> SMS automatically. Only the UPI reference, amount, time and bank are kept, and they're deleted after 7 days.
+        <span class="muted">You can also paste an SMS by hand any time.</span></span></label>
+      <button class="primary" id="shopBtn" type="submit">Create my shop</button>
+    </form>
+    <div class="msg" id="shopMsg" role="alert" hidden></div>
+  </section>
+
+  <!-- 3. Shop ready -->
+  <section class="panel" id="shopView" hidden>
+    <div class="row">
+      <div><h2 id="shopTitle"></h2><span class="muted" id="shopType"></span></div>
+      <button class="link" id="logoutBtn" type="button">Log out</button>
+    </div>
+    <div class="msg warn" id="companyNote" hidden>Company verification (Razorpay webhooks) is our next phase. Your shop verifies with bank SMS meanwhile.</div>
+    <img class="qr" id="shopQr" alt="Your shop's QR code: customers scan it to upload their payment screenshot">
+    <p class="muted" style="text-align:center">Print this QR and keep it at the counter.<br><code id="shopPay"></code></p>
+    <button class="primary" id="openLive" type="button">Open live screen</button>
+    <details style="margin-top:14px">
+      <summary class="muted">SMS forwarder settings</summary>
+      <p class="muted">POST <code id="fwdUrl"></code><br>Header <code>X-Token: <span id="fwdToken"></span></code><br>
+      JSON <code>{"sender": "...", "body": "...", "received_at": "..."}</code><br>
+      Automatic forwarding: <b id="fwdConsent"></b></p>
+    </details>
+    <button class="link" id="editBtn" type="button">Edit shop details</button>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = (sel) => document.querySelector(sel);
+const KEY = "satyasceau.session";
+const store = {
+  get() { try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch { return null; } },
+  set(v) { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch { /* private mode: session lasts this tab */ } },
+  clear() { try { localStorage.removeItem(KEY); } catch { /* ignore */ } },
+};
+let session = store.get();
+let mode = "login";
+let shop = null;
+
+function show(id) { for (const s of ["authView", "setupView", "shopView"]) $("#" + s).hidden = s !== id; }
+function msg(el, text, kind = "err") { el.textContent = text; el.className = "msg " + kind; el.hidden = !text; }
+
+async function api(path, { method = "GET", body, auth = false } = {}) {
+  const headers = { "Content-Type": "application/json" };
+  if (auth && session) headers.Authorization = "Bearer " + session.access_token;
+  let r;
+  try { r = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined }); }
+  catch { return { ok: false, status: 0, data: { detail: "No connection. Check your internet." } }; }
+  const data = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, data };
+}
+const detail = (d) => (typeof d.detail === "string" ? d.detail : Array.isArray(d.detail) ? "Check the fields and try again." : "Something went wrong.");
+
+// ---------- 1. auth ----------
+function setMode(next) {
+  mode = next;
+  $("#tabLogin").setAttribute("aria-selected", String(next === "login"));
+  $("#tabRegister").setAttribute("aria-selected", String(next === "register"));
+  $("#authBtn").textContent = next === "login" ? "Log in" : "Create account";
+  $("#password").autocomplete = next === "login" ? "current-password" : "new-password";
+  msg($("#authMsg"), "");
+}
+$("#tabLogin").addEventListener("click", () => setMode("login"));
+$("#tabRegister").addEventListener("click", () => setMode("register"));
+
+$("#authForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = $("#authBtn"); btn.disabled = true;
+  const res = await api(`/api/auth/${mode}`, { method: "POST", body: { email: $("#email").value, password: $("#password").value } });
+  btn.disabled = false;
+  if (!res.ok) return msg($("#authMsg"), detail(res.data), res.status === 409 ? "warn" : "err");
+  session = { access_token: res.data.access_token, email: res.data.user.email };
+  store.set(session);
+  $("#password").value = "";
+  await loadMe();
+});
+
+// ---------- 2. setup ----------
+$("#shopForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = $("#shopBtn"); btn.disabled = true;
+  const res = await api("/api/me/shop", { method: "POST", auth: true, body: {
+    account_type: document.querySelector("input[name=atype]:checked").value,
+    name: $("#shopName").value.trim(), upi_id: $("#shopUpi").value.trim(), sms_consent: $("#consent").checked,
+  } });
+  btn.disabled = false;
+  if (res.status === 401) return logout("Your session expired. Please log in again.");
+  if (!res.ok) return msg($("#shopMsg"), detail(res.data));
+  shop = res.data.shop;
+  renderShop();
+});
+
+function openSetup(prefill) {
+  $("#setupWho").textContent = "Signed in as " + (session?.email || "");
+  $("#shopBtn").textContent = prefill ? "Save changes" : "Create my shop";
+  if (prefill) {
+    $("#shopName").value = prefill.name; $("#shopUpi").value = prefill.upi_id || "";
+    $("#consent").checked = !!prefill.sms_consent;
+    for (const r of document.querySelectorAll("input[name=atype]")) r.checked = r.value === prefill.account_type;
+  }
+  msg($("#shopMsg"), "");
+  show("setupView");
+}
+$("#editBtn").addEventListener("click", () => openSetup(shop));
+
+// ---------- 3. shop ----------
+function renderShop() {
+  $("#shopTitle").textContent = shop.name;
+  $("#shopType").textContent = (shop.account_type === "company" ? "Company account" : "Personal UPI account") + " · " + (session?.email || "");
+  $("#companyNote").hidden = shop.account_type !== "company";
+  $("#shopQr").src = "data:image/png;base64," + shop.qr_png_base64;
+  $("#shopPay").textContent = shop.pay_url;
+  $("#fwdUrl").textContent = new URL("/api/sms", shop.pay_url).href;
+  $("#fwdToken").textContent = shop.api_token;
+  $("#fwdConsent").textContent = shop.sms_consent ? "on" : "off (paste SMS by hand on the live screen)";
+  show("shopView");
+}
+$("#openLive").addEventListener("click", () => location.assign(shop.screen_path));
+
+function logout(reason) {
+  session = null; shop = null; store.clear();
+  setMode("login"); show("authView");
+  if (reason) msg($("#authMsg"), reason, "warn");
+}
+$("#logoutBtn").addEventListener("click", () => logout());
+
+async function loadMe() {
+  const res = await api("/api/me", { auth: true });
+  if (res.status === 401) return logout("Please log in again.");
+  if (!res.ok) { show("authView"); return msg($("#authMsg"), detail(res.data)); }
+  session.email = res.data.user.email; store.set(session);
+  shop = res.data.shop;
+  if (shop) renderShop(); else openSetup(null);
+}
+
+// ---------- start ----------
+(async function start() {
+  const status = await api("/api/auth/status");
+  if (!status.ok || !status.data.configured) {
+    show("authView");
+    msg($("#authMsg"), "Login isn't set up on this server yet (Supabase keys missing). The demo shop still works from its merchant link.", "warn");
+    $("#authBtn").disabled = true;
+    return;
+  }
+  if (session?.access_token) await loadMe(); else show("authView");
+})();
+</script>
+</body>
+</html>

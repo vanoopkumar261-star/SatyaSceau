@@ -20,6 +20,7 @@ SatyaSceau ties the customer's screenshot to a real bank credit on the merchant'
 
 ## Features
 
+- Merchant **register / log in** (Supabase Auth) at `/login`, then choose **Personal UPI** (live, bank-SMS checks) or **Company** (payment-gateway webhooks: next phase), and the shop + printable QR are created
 - No-login customer upload from a printed QR
 - OCR of UTR and amount with Tesseract and OpenCV. Images are processed in memory and never stored.
 - Bank-SMS ingest with a DLT sender allowlist. OTP, debit and promo messages are dropped.

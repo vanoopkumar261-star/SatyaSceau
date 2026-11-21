@@ -17,6 +17,7 @@ from app import (
     events,
     matcher,
     privacy,
+    routes_auth,
     routes_merchant,
     routes_privacy,
     routes_proof,
@@ -74,10 +75,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="SatyaSceau", version=settings.APP_VERSION, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-for module in (routes_merchant, routes_proof, routes_privacy, routes_sms, routes_records):
+for module in (routes_merchant, routes_auth, routes_proof, routes_privacy, routes_sms, routes_records):
     app.include_router(module.router)
 
 
 @app.get("/", include_in_schema=False)
 def root():
-    return RedirectResponse("/docs")
+    return RedirectResponse("/login")  # the site's front door; API docs stay at /docs

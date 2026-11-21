@@ -12,7 +12,22 @@ ENV_FILE = BASE_DIR / ".env"
 DEFAULT_BASE_URL = "http://localhost:8000"
 
 _REAL_ENV_BASE_URL = os.environ.get("BASE_URL")  # captured BEFORE .env is loaded: a real env var
+_REAL_ENV = dict(os.environ)                      # same idea for the other live settings
 load_dotenv(ENV_FILE)
+
+
+def _live_env(name: str, default: str = "") -> str:
+    """Setting read LIVE: real environment variable > current backend/.env > default.
+
+    Lets you paste e.g. SUPABASE_URL into .env while the server runs, without a restart.
+    """
+    if _REAL_ENV.get(name):
+        return _REAL_ENV[name].strip()
+    try:
+        value = dotenv_values(ENV_FILE).get(name) if ENV_FILE.exists() else None
+    except OSError:
+        value = None
+    return (value or default).strip()
 
 
 def _bool(name: str, default: bool) -> bool:
@@ -48,6 +63,15 @@ class Settings:
     @BASE_URL.setter
     def BASE_URL(self, value: str | None) -> None:
         self._base_url_override = value
+
+    # Supabase Auth (register/login only; app data stays in SQLite). Public anon/publishable key only.
+    @property
+    def SUPABASE_URL(self) -> str:
+        return _live_env("SUPABASE_URL").rstrip("/")
+
+    @property
+    def SUPABASE_ANON_KEY(self) -> str:
+        return _live_env("SUPABASE_ANON_KEY")
 
     def __init__(self) -> None:
         self.APP_VERSION = "0.1.0"
