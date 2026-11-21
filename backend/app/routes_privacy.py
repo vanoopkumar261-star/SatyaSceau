@@ -4,13 +4,17 @@ STUB from the scaffold. Keep the paths and parameters; replace the bodies.
 Spec: docs/WORK_SPLIT.md -> Pile 2, Steps 5-6.
 """
 
+import secrets
+
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.config import STATIC_DIR
+from app import privacy
 from app.db import get_session
+from app.models import Merchant
 
 router = APIRouter()
 
@@ -33,7 +37,13 @@ def update_consent(
     session: Session = Depends(get_session),
 ):
     """X-Token must be this merchant's api_token. Returns {"consent_given": bool}."""
-    raise HTTPException(501, "Not implemented yet (Pile 2: Privacy)")
+    merchant = session.get(Merchant, merchant_id)
+    if merchant is None:
+        raise HTTPException(404, "merchant not found")
+    if not x_token or not secrets.compare_digest(x_token, merchant.api_token):
+        raise HTTPException(401, "invalid token")
+    merchant = privacy.set_consent(session, merchant_id, body.given)
+    return {"consent_given": merchant.consent_given}
 
 
 @router.get("/mock-bank", include_in_schema=False)
