@@ -128,6 +128,33 @@ def test_key_persists_across_restarts(session, tmp_key):
     assert signing.public_key_b64() == pk
 
 
+def test_public_key_endpoint(client):
+    r = client.get("/api/public-key").json()
+    assert r == {"algorithm": "Ed25519", "public_key": signing.public_key_b64()}
+
+
+def test_record_api_and_verify_endpoint(client, session):
+    rec = signing.sign_case(session, _final_case(session))
+    assert client.get("/api/records/nope123").status_code == 404
+    got = client.get(f"/api/records/{rec.case_id}").json()
+    assert got["record"] == json.loads(rec.record_json) and got["signature"] == rec.signature
+    assert got["record_sha256"] == rec.record_sha256 and got["public_key"] == signing.public_key_b64()
+    ok = client.post("/api/records/verify", json={"record_json": got["record_json"], "signature": got["signature"]})
+    assert ok.json() == {"valid": True}
+    tampered = got["record"] | {"verdict": "VERIFIED", "amount": 9999}
+    assert client.post("/api/records/verify", json={"record_json": tampered, "signature": got["signature"]}).json() == {"valid": False}
+    assert client.post("/api/records/verify", json={"record_json": "{}", "signature": "@@@"}).json() == {"valid": False}
+
+
+def test_record_page_served_with_safe_headers(client, session):
+    rec = signing.sign_case(session, _final_case(session))
+    assert client.get("/record/nope123").status_code == 404
+    assert client.get("/record/bad..id").status_code in (404, 422)
+    r = client.get(f"/record/{rec.case_id}")
+    assert r.status_code == 200 and "Verify this record" in r.text
+    assert r.headers["referrer-policy"] == "no-referrer" and "default-src 'none'" in r.headers["content-security-policy"]
+
+
 def test_full_flow_produces_a_valid_record(session):
     mid, _ = _merchant(session)
     m = session.get(Merchant, mid)
