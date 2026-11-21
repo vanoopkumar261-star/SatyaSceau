@@ -41,3 +41,16 @@ def test_qr_poster_is_a_png_larger_than_the_bare_qr(tmp_path):
     with Image.open(path) as img:
         assert img.format == "PNG"
         assert img.width > bare.width and img.height > bare.height + 100  # heading + shop name + footer
+
+
+def test_demo_tunnel_set_base_url_replaces_or_appends(tmp_path):
+    from scripts.demo_tunnel import set_base_url
+
+    env = tmp_path / ".env"
+    env.write_text("TESSERACT_CMD=C:/x/tesseract.exe\nBASE_URL=http://localhost:8000\n", encoding="utf-8")
+    set_base_url("https://a-b.trycloudflare.com", env)
+    assert env.read_text(encoding="utf-8") == "TESSERACT_CMD=C:/x/tesseract.exe\nBASE_URL=https://a-b.trycloudflare.com\n"
+
+    env.write_text("TESSERACT_CMD=C:/x/tesseract.exe", encoding="utf-8")
+    set_base_url("https://c-d.trycloudflare.com", env)
+    assert env.read_text(encoding="utf-8").endswith("\nBASE_URL=https://c-d.trycloudflare.com\n")

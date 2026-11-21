@@ -70,3 +70,18 @@ def test_init_db_adds_new_columns_to_an_old_database():
     columns = {c["name"] for c in inspect(eng).get_columns("merchants")}
     assert "screen_key" in columns
     eng.dispose()
+
+
+def test_base_url_is_read_live_from_env_file(tmp_path, monkeypatch, client):
+    """demo_tunnel.py rewrites .env while the server runs: new QR codes must follow without a restart."""
+    from app import config
+
+    env = tmp_path / ".env"
+    monkeypatch.setattr(config, "ENV_FILE", env)
+    monkeypatch.setattr(config, "_REAL_ENV_BASE_URL", None)
+    env.write_text("BASE_URL=https://first.trycloudflare.com/\n", encoding="utf-8")
+    first = client.post("/api/merchants", json={"name": "A"}).json()
+    env.write_text("BASE_URL=https://second.trycloudflare.com\n", encoding="utf-8")
+    second = client.post("/api/merchants", json={"name": "B"}).json()
+    assert first["pay_url"].startswith("https://first.trycloudflare.com/pay/")
+    assert second["pay_url"].startswith("https://second.trycloudflare.com/pay/")

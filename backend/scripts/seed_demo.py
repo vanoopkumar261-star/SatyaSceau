@@ -106,6 +106,7 @@ def main(argv=None) -> int:
     parser.add_argument("--name", default=DEFAULT_NAME)
     parser.add_argument("--upi", default=DEFAULT_UPI)
     parser.add_argument("--base-url", default=settings.BASE_URL, help="public URL phones use (default: BASE_URL)")
+    parser.add_argument("--port", type=int, default=8000, help="local server port (for the laptop link)")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--new", action="store_true", help="create another shop instead of reusing")
     group.add_argument("--rotate", action="store_true", help="new SMS token + screen key for the same shop")
@@ -120,7 +121,14 @@ def main(argv=None) -> int:
         m, action = seed_merchant(session, args.name, args.upi, new=args.new, rotate=args.rotate)
 
     pay_url = f"{base}/pay/{m.id}"
-    screen_url = f"{base}/merchant?m={m.id}#k={m.screen_key}"
+    screen_path = f"/merchant?m={m.id}#k={m.screen_key}"
+    screen_url = base + screen_path
+    is_local = "localhost" in base or "127.0.0.1" in base
+    if is_local:
+        screen_lines = f"  Merchant screen  {screen_url}"
+    else:  # quick tunnels buffer the live stream: the laptop gets instant updates over localhost
+        screen_lines = (f"  Merchant screen  laptop (instant): http://localhost:{args.port}{screen_path}\n"
+                        f"                   any phone (~3 s): {screen_url}")
     qr_path = write_qr_poster(pay_url, m.name, settings.DATA_DIR / f"demo_qr_{m.id}.png")
     today = utcnow().astimezone(timezone(timedelta(hours=5, minutes=30))).strftime("%d-%m-%y")  # banks write IST
     sms_body = f"Rs.1.00 credited to A/c XX1234 on {today} by UPI Ref No 123456789012. -HDFC Bank"
@@ -130,7 +138,7 @@ SatyaSceau demo shop ({action})
   Shop             {m.name}   (id {m.id})
   Customer QR      {qr_path}
                    opens {pay_url}
-  Merchant screen  {screen_url}
+{screen_lines}
   SMS forwarding   consent ON (demo opt-in)
 
 Android SMS forwarder  (forward bank senders only, e.g. {DEMO_SENDER})
@@ -141,7 +149,7 @@ Android SMS forwarder  (forward bank senders only, e.g. {DEMO_SENDER})
 Test a bank SMS without a phone (PowerShell):
   Invoke-RestMethod -Method Post -Uri {base}/api/sms -Headers @{{"X-Token"="{m.api_token}"}} -ContentType "application/json" -Body '{{"sender":"{DEMO_SENDER}","body":"{sms_body}"}}'
 """)
-    if "localhost" in base or "127.0.0.1" in base:
+    if is_local:
         print("  NOTE: phones can't open localhost. Start a tunnel, put its URL in backend/.env as BASE_URL,")
         print("        then re-run this script so the QR points at it (the token stays the same).\n")
     return 0

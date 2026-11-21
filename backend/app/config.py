@@ -3,13 +3,16 @@
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent  # backend/
 DATA_DIR = BASE_DIR / "data"  # gitignored: SQLite DB + signing key live here
 STATIC_DIR = BASE_DIR / "static"
+ENV_FILE = BASE_DIR / ".env"
+DEFAULT_BASE_URL = "http://localhost:8000"
 
-load_dotenv(BASE_DIR / ".env")
+_REAL_ENV_BASE_URL = os.environ.get("BASE_URL")  # captured BEFORE .env is loaded: a real env var
+load_dotenv(ENV_FILE)
 
 
 def _bool(name: str, default: bool) -> bool:
@@ -22,6 +25,30 @@ def _path(name: str, default: Path) -> Path:
 
 
 class Settings:
+    _base_url_override: str | None = None
+
+    @property
+    def BASE_URL(self) -> str:
+        """Public URL used in QR codes and links. Read LIVE, not at startup.
+
+        scripts/demo_tunnel.py rewrites .env with a new tunnel URL while the server runs, so the next
+        QR the server makes points at it without a restart. Precedence: value assigned in code (tests)
+        > real environment variable > current .env > default.
+        """
+        if self._base_url_override:
+            return self._base_url_override.rstrip("/")
+        if _REAL_ENV_BASE_URL:
+            return _REAL_ENV_BASE_URL.rstrip("/")
+        try:
+            value = dotenv_values(ENV_FILE).get("BASE_URL") if ENV_FILE.exists() else None
+        except OSError:
+            value = None
+        return (value or DEFAULT_BASE_URL).rstrip("/")
+
+    @BASE_URL.setter
+    def BASE_URL(self, value: str | None) -> None:
+        self._base_url_override = value
+
     def __init__(self) -> None:
         self.APP_VERSION = "0.1.0"
         self.STATIC_DIR = STATIC_DIR  # also reachable as settings.* (WORK_SPLIT lists them with settings)
@@ -32,7 +59,6 @@ class Settings:
         self.SIGNING_KEY_PATH = _path("SIGNING_KEY_PATH", DATA_DIR / "signing_key.pem")
         self.MATCH_WINDOW_MIN = int(os.getenv("MATCH_WINDOW_MIN", "5"))
         self.RETENTION_DAYS = int(os.getenv("RETENTION_DAYS", "7"))
-        self.BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
         self.TESSERACT_CMD = os.getenv("TESSERACT_CMD", "")
         self.OCR_MIN_CONF = float(os.getenv("OCR_MIN_CONF", "60"))
         self.MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "8"))
