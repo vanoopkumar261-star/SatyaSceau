@@ -1,46 +1,48 @@
 <!doctype html>
-<!-- DEMO BACKUP — simulated bank SMS. Owner: Pile 2 (Privacy & Mock bank).
-     Spec: docs/WORK_SPLIT.md -> Pile 2, Step 6. No external scripts. -->
+<!-- DEMO BACKUP: simulated bank SMS. Owner: Pile 2 (Privacy & Mock bank). System: DESIGN.md + /static/css/theme.css.
+     Ids form/merchant/key/utr/amount/send/result and the result classes hidden/ok/no/err are read by the script. -->
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SatyaSceau — Mock bank (demo backup)</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-           background: #f4f6f8; color: #1a2330; }
-    .banner { background: #c62828; color: #fff; text-align: center; font-weight: 800;
-              letter-spacing: .5px; padding: 14px 12px; font-size: 1.05rem; }
-    main { max-width: 420px; margin: 0 auto; padding: 20px 16px; }
-    label { display: block; margin: 14px 0 6px; font-weight: 600; }
-    input { width: 100%; padding: 14px; font-size: 1.05rem; border: 1px solid #b8c2d0; border-radius: 10px; }
-    button { width: 100%; margin-top: 20px; padding: 16px; font-size: 1.1rem; font-weight: 700;
-             color: #fff; background: #c62828; border: 0; border-radius: 12px; cursor: pointer; }
-    button[disabled] { background: #9aa4b2; }
-    #result { margin-top: 18px; padding: 14px; border-radius: 10px; font-weight: 600; }
-    .ok { background: #d9f5e1; color: #11632a; }
-    .no { background: #fff4d6; color: #7a5600; }
-    .err { background: #fde0e0; color: #8a1c1c; }
-    .hidden { display: none; }
-    p.note { color: #5b6776; font-size: .9rem; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>SatyaSceau — Mock bank (demo backup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400..800&amp;family=Noto+Sans+Devanagari:wght@400;600;700&amp;family=Source+Code+Pro:wght@400..600&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,500,0..1,0&amp;icon_names=account_balance,add_card,block,cancel,check,check_circle,chevron_right,content_copy,error,expand_more,fingerprint,hourglass_empty,hourglass_top,image,info,key,language,lock,login,logout,photo_camera,print,qr_code_2,receipt_long,record_voice_over,remove,replay,schedule,search,shield,sms,storefront,sync,task_alt,translate,upload,upload_file,verified,verified_user,visibility,visibility_off,volume_up,warning,wifi_off&amp;display=block">
+<link rel="stylesheet" href="/static/css/theme.css">
+<style>
+  /* Intent: a demo operator rescuing a live demo. It must never be mistaken for the real bank flow. */
+  .banner { background: var(--demo); color: var(--white); padding: 14px var(--gutter); display: flex; align-items: center; justify-content: center;
+            gap: var(--s-2); font-weight: 800; text-align: center; }
+  main { max-width: 440px; margin: 0 auto; padding: var(--s-5) var(--gutter) var(--s-12); }
+  .note { color: var(--ink-2); font-size: var(--t-sm); margin-bottom: var(--s-4); }
+  form { background: var(--paper); border-radius: var(--r-card); box-shadow: var(--shadow-card); padding: var(--s-6); }
+  #send { width: 100%; margin-top: var(--s-5); background: var(--demo); color: var(--white); }
+  #result { margin-top: var(--s-4); display: flex; gap: var(--s-2); align-items: flex-start; border-radius: var(--r-tile); padding: 12px 14px; font-weight: 600; }
+  #result::before { font-family: "Material Symbols Outlined"; font-size: 22px; font-weight: 400; }
+  #result.ok { background: var(--ok-tint); color: var(--on-ok-tint); } #result.ok::before { content: "check_circle"; }
+  #result.no { background: var(--wait-tint); color: var(--on-wait-tint); } #result.no::before { content: "warning"; }
+  #result.err { background: var(--no-tint); color: var(--on-no-tint); } #result.err::before { content: "error"; }
+  .hidden { display: none !important; }
+</style>
 </head>
 <body>
-  <div class="banner">DEMO BACKUP — simulated bank SMS</div>
+  <div class="banner" role="alert"><span class="ms" aria-hidden="true">warning</span>DEMO BACKUP: simulated bank SMS</div>
   <main>
-    <p class="note">Pretends the merchant's bank sent a credit SMS (sender AX-HDFCBK).
-       Use only if the real SMS forwarder is not working.</p>
+    <p class="note">Pretends the merchant's bank sent a credit SMS (sender AX-HDFCBK). Use only if the real SMS forwarder is not working.</p>
     <form id="form">
-      <label for="merchant">Merchant ID</label>
+      <label class="field-label" for="merchant">Merchant ID</label>
       <input id="merchant" required autocomplete="off">
-      <label for="key">Screen key <small>(filled in if you opened the merchant screen on this device)</small></label>
+      <label class="field-label" for="key">Screen key</label>
       <input id="key" required autocomplete="off" spellcheck="false">
-      <label for="utr">UTR (12 digits)</label>
-      <input id="utr" required inputmode="numeric" pattern="[0-9]{12}" maxlength="12" autocomplete="off">
-      <label for="amount">Amount (₹)</label>
+      <p class="hint">Filled in if you opened the merchant screen on this device.</p>
+      <label class="field-label" for="utr">UTR (12 digits)</label>
+      <input id="utr" required inputmode="numeric" pattern="[0-9]{12}" maxlength="12" autocomplete="off" class="mono">
+      <label class="field-label" for="amount">Amount (₹)</label>
       <input id="amount" required type="number" step="0.01" min="0.01" inputmode="decimal">
-      <button id="send" type="submit">Send simulated bank SMS</button>
+      <button class="btn" id="send" type="submit"><span class="ms" aria-hidden="true">sms</span>Send simulated bank SMS</button>
     </form>
     <div id="result" class="hidden" role="status"></div>
   </main>
@@ -69,7 +71,7 @@
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (b) { return { code: r.status, body: b }; }); })
       .then(function (res) {
         out.classList.remove("hidden", "ok", "no", "err");
-        if (res.code === 200 && res.body.accepted) { out.classList.add("ok"); out.textContent = "Accepted ✓ — bank credit stored."; }
+        if (res.code === 200 && res.body.accepted) { out.classList.add("ok"); out.textContent = "Accepted: bank credit stored."; }
         else if (res.code === 200) { out.classList.add("no"); out.textContent = "Rejected — the SMS was not accepted as a bank credit."; }
         else if (res.code === 404) { out.classList.add("err"); out.textContent = "Unknown merchant ID."; }
         else if (res.code === 403) { out.classList.add("err"); out.textContent = "Wrong or missing screen key. Open the merchant screen on this device first, or paste its key."; }
