@@ -1,0 +1,183 @@
+<!doctype html>
+<!-- Home page  /   Owner: Pile 1 (Platform). No external scripts or fonts. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SatyaSceau — Every payment gets a witness</title>
+<meta name="description" content="SatyaSceau checks a customer's UPI payment screenshot against the shop's own bank record and gives a spoken verdict in seconds.">
+<link rel="stylesheet" href="/static/site.css">
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --text: #111827; --muted: #6b7280; --line: #e5e7eb; --accent: #1d4ed8; --accent-text: #fff;
+    --green: #15803d; --green-bg: #dcfce7; --amber: #b45309; --amber-bg: #fef3c7; --red: #b91c1c; --red-bg: #fee2e2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0f14; --surface: #121821; --text: #f3f4f6; --muted: #9ca3af; --line: #253041; --accent: #60a5fa; --accent-text: #0b0f14;
+      --green: #4ade80; --green-bg: #0f2a1a; --amber: #fbbf24; --amber-bg: #2d2208; --red: #f87171; --red-bg: #2e1010;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Devanagari", sans-serif; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+  section { padding: 56px 0; }
+  h1 { font-size: clamp(2rem, 6vw, 3.3rem); line-height: 1.1; margin: 0 0 14px; letter-spacing: -.02em; }
+  h2 { font-size: clamp(1.4rem, 3.6vw, 2rem); margin: 0 0 8px; letter-spacing: -.01em; }
+  .lead { font-size: 1.12rem; color: var(--muted); max-width: 560px; }
+  .kicker { color: var(--accent); font-weight: 700; font-size: .85rem; letter-spacing: .06em; text-transform: uppercase; margin: 0 0 8px; }
+  .btn { display: inline-block; padding: 13px 20px; border-radius: 12px; font-weight: 700; text-decoration: none; border: 1px solid var(--line); color: var(--text); background: var(--surface); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
+  .hero { display: grid; grid-template-columns: 1.15fr .85fr; gap: 40px; align-items: center; padding-top: 48px; }
+  .mock { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 18px; box-shadow: 0 20px 50px -24px rgba(0,0,0,.35); }
+  .mock .bar { display: flex; justify-content: space-between; font-size: .8rem; color: var(--muted); margin-bottom: 12px; }
+  .mock .live { color: var(--green); font-weight: 700; }
+  .verdict { border-radius: 16px; padding: 22px 16px; text-align: center; background: var(--green-bg); border: 3px solid var(--green); }
+  .verdict .ic { font-size: 2.6rem; line-height: 1; }
+  .verdict .lb { color: var(--green); font-weight: 800; font-size: 1.5rem; margin-top: 6px; }
+  .verdict .am { font-size: 2.3rem; font-weight: 800; }
+  .verdict .rs { font-size: .9rem; color: var(--muted); }
+  .speak { margin-top: 12px; font-size: .9rem; color: var(--muted); text-align: center; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 24px; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+  .card h3 { margin: 6px 0 6px; font-size: 1.08rem; }
+  .card p { margin: 0; color: var(--muted); font-size: .95rem; }
+  .card .em { font-size: 1.6rem; }
+  .steps { counter-reset: s; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 24px; }
+  .step { position: relative; padding-top: 46px; }
+  .step::before { counter-increment: s; content: counter(s); position: absolute; top: 18px; left: 20px; width: 28px; height: 28px; border-radius: 50%;
+                  display: grid; place-items: center; background: var(--accent); color: var(--accent-text); font-weight: 800; font-size: .9rem; }
+  .chips { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+  .chip { border-radius: 999px; padding: 8px 14px; font-weight: 700; font-size: .92rem; }
+  .chip.g { background: var(--green-bg); color: var(--green); } .chip.a { background: var(--amber-bg); color: var(--amber); } .chip.r { background: var(--red-bg); color: var(--red); }
+  .chip small { font-weight: 500; color: var(--text); opacity: .8; margin-left: 6px; }
+  .tag { display: inline-block; font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; vertical-align: middle; margin-left: 6px; }
+  .tag.live { background: var(--green-bg); color: var(--green); } .tag.soon { background: var(--amber-bg); color: var(--amber); }
+  .quote { font-size: clamp(1.2rem, 3vw, 1.55rem); font-weight: 700; max-width: 760px; }
+  .band { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .cta { text-align: center; }
+  .cta .actions { justify-content: center; }
+  @media (max-width: 860px) {
+    .hero { grid-template-columns: 1fr; gap: 28px; }
+    .grid3, .steps { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 560px) {
+    section { padding: 40px 0; }
+    .grid3, .grid2, .steps { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header class="site-header"><div class="site-inner">
+  <a class="site-brand" href="/"><span class="site-mark">✓</span>SatyaSceau</a>
+  <nav class="site-nav">
+    <a class="site-hide-sm" href="#how">How it works</a>
+    <a class="site-hide-sm" href="#features">Features</a>
+    <a id="navLogin" href="/login">Log in</a>
+    <a class="site-cta" id="navCta" href="/login?mode=register">Register</a>
+  </nav>
+</div></header>
+
+<main>
+  <div class="wrap hero">
+    <div>
+      <p class="kicker">UPI payment proof, verified</p>
+      <h1>Every payment gets a witness.</h1>
+      <p class="lead">Fake, edited and reused UPI screenshots cost small shops and delivery riders money every day.
+        SatyaSceau checks the customer's screenshot against <b>your own bank record</b> and tells you in seconds, out loud.</p>
+      <div class="actions">
+        <a class="btn primary" href="/login?mode=register">Create your shop: free</a>
+        <a class="btn" href="#how">See how it works</a>
+      </div>
+    </div>
+    <div class="mock" aria-label="Example of the merchant's live screen">
+      <div class="bar"><span>Raju Tea Stall</span><span class="live">● Live</span></div>
+      <div class="verdict">
+        <div class="ic">✅</div>
+        <div class="lb">भुगतान सत्यापित</div>
+        <div class="am">₹150.00</div>
+        <div class="rs">Payment received in bank · UTR 4318 7650 9123</div>
+      </div>
+      <div class="speak">🔊 “150 रुपये का भुगतान सत्यापित हुआ”</div>
+    </div>
+  </div>
+
+  <section>
+    <div class="wrap">
+      <p class="quote">A screenshot proves nothing. The receiver's own bank credit is the only source of truth.</p>
+      <div class="grid3">
+        <div class="card"><div class="em">🖼️</div><h3>Fake screenshots</h3><p>Apps and editors make "Payment successful" screens in seconds.</p></div>
+        <div class="card"><div class="em">✏️</div><h3>Edited amounts</h3><p>₹15 becomes ₹150 with one edit. The shopkeeper can't tell at a glance.</p></div>
+        <div class="card"><div class="em">🔁</div><h3>Reused proofs</h3><p>One real payment, shown again and again at different times.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="how">
+    <div class="wrap">
+      <p class="kicker">How it works</p>
+      <h2>Four steps, no app to install</h2>
+      <div class="steps">
+        <div class="card step"><h3>Register &amp; print your QR</h3><p>Choose Personal UPI or Company, name your shop, print the QR.</p></div>
+        <div class="card step"><h3>Customer uploads</h3><p>They scan your QR and upload the original payment screenshot. No login.</p></div>
+        <div class="card step"><h3>Your bank confirms</h3><p>Your bank's credit SMS is forwarded automatically, or you paste it.</p></div>
+        <div class="card step"><h3>Instant verdict</h3><p>Green, amber or red, spoken aloud on both phones, with a signed record.</p></div>
+      </div>
+      <div class="chips">
+        <span class="chip g">✅ Verified <small>UTR + amount match your bank, first use</small></span>
+        <span class="chip a">⏳ Waiting <small>looks fine, bank SMS not here yet</small></span>
+        <span class="chip r">❌ Not verified <small>replayed, edited, or no credit in 5 min</small></span>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <p class="kicker">Built to be trusted</p>
+      <h2>What happens behind the green tick</h2>
+      <div class="grid3">
+        <div class="card"><div class="em">🔢</div><h3>UTR matching</h3><p>The 12-digit UPI reference is identical on both sides of a payment, so we match on that, not on app IDs.</p></div>
+        <div class="card"><div class="em">🛡️</div><h3>Replay protection</h3><p>Each UTR can be used once, enforced by the database. Lookalike and re-saved screenshots are caught.</p></div>
+        <div class="card"><div class="em">🔊</div><h3>Hindi &amp; English voice</h3><p>The verdict is spoken on the merchant's and the customer's phone. No reading needed at a busy counter.</p></div>
+        <div class="card"><div class="em">✍️</div><h3>Signed records</h3><p>Every verdict becomes a write-once record signed with Ed25519. Anyone can verify it, and edits break it.</p></div>
+        <div class="card"><div class="em">🔒</div><h3>Privacy first</h3><p>Screenshots are never stored. Only the UTR, amount and time are kept, deleted after 7 days, and only with your consent.</p></div>
+        <div class="card"><div class="em">📱</div><h3>Any phone</h3><p>Works in the browser on any smartphone. Bank SMS from official sender IDs only.</p></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><h3>Personal UPI <span class="tag live">Live</span></h3><p>For shopkeepers, riders and freelancers on their own UPI ID. Verified against your bank's credit SMS.</p></div>
+        <div class="card"><h3>Company <span class="tag soon">Coming next</span></h3><p>Payment-gateway QR with signed webhooks for businesses. Until then, company shops verify with bank SMS.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band cta">
+    <div class="wrap">
+      <h2>Stop guessing. Start verifying.</h2>
+      <p class="lead" style="margin: 0 auto">Set up your shop in a minute and print your QR.</p>
+      <div class="actions">
+        <a class="btn primary" href="/login?mode=register">Create your shop</a>
+        <a class="btn" href="/login">I already have an account</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer"><div class="site-inner">
+  <span>SatyaSceau · Team Billi meows · Hacknovate 2026, siNUsoid vX, NIIT University</span>
+  <span><a href="/docs">API</a> · <a href="https://github.com/vanoopkumar261-star/SatyaSceau">GitHub</a></span>
+</div></footer>
+
+<script>
+  // Logged in already? Point the header at the dashboard instead of Register.
+  try {
+    if (JSON.parse(localStorage.getItem("satyasceau.session") || "null")) {
+      document.getElementById("navLogin").textContent = "My shop";
+      const cta = document.getElementById("navCta"); cta.textContent = "Dashboard"; cta.href = "/login";
+    }
+  } catch { /* storage blocked: keep defaults */ }
+</script>
+</body>
+</html>

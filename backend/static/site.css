@@ -1,0 +1,32 @@
+/* Shared site chrome: header + footer used by the home page, login and the merchant dashboard.
+   Namespaced (.site-*) so it never clashes with a page's own styles.  Owner: Pile 1 (Platform). */
+:root {
+  --site-bg: #ffffff; --site-text: #111827; --site-muted: #6b7280; --site-line: #e5e7eb;
+  --site-accent: #1d4ed8; --site-accent-text: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --site-bg: #0b0f14; --site-text: #f3f4f6; --site-muted: #9ca3af; --site-line: #253041;
+    --site-accent: #60a5fa; --site-accent-text: #0b0f14;
+  }
+}
+.site-header { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--site-bg) 92%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--site-line); }
+.site-header .site-inner { max-width: 1080px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 14px; }
+.site-brand { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 1.08rem; color: var(--site-text); text-decoration: none; }
+.site-brand .site-mark { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 8px;
+  background: var(--site-accent); color: var(--site-accent-text); font-size: .95rem; }
+.site-nav { margin-left: auto; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.site-nav a, .site-nav button { font: inherit; font-size: .93rem; color: var(--site-muted); text-decoration: none; padding: 7px 10px;
+  border-radius: 9px; background: none; border: 0; cursor: pointer; }
+.site-nav a:hover, .site-nav button:hover { color: var(--site-text); }
+.site-nav a[aria-current="page"] { color: var(--site-text); font-weight: 600; }
+.site-nav .site-cta { background: var(--site-accent); color: var(--site-accent-text); font-weight: 700; }
+.site-nav .site-cta:hover { color: var(--site-accent-text); filter: brightness(1.08); }
+.site-footer { border-top: 1px solid var(--site-line); color: var(--site-muted); font-size: .86rem; }
+.site-footer .site-inner { max-width: 1080px; margin: 0 auto; padding: 18px 16px; display: flex; gap: 10px 18px; flex-wrap: wrap; justify-content: space-between; }
+.site-footer a { color: var(--site-muted); }
+@media (max-width: 560px) {
+  .site-nav .site-hide-sm { display: none; }
+}
+@media print { .site-header, .site-footer { display: none; } }

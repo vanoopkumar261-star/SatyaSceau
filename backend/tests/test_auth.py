@@ -37,10 +37,12 @@ def _shop(client, token="tok-a", **kw):
 
 # --- pages + status ------------------------------------------------------------------
 
-def test_front_door_is_the_login_page(client):
-    r = client.get("/", follow_redirects=False)
-    assert r.status_code in (302, 307) and r.headers["location"] == "/login"
+def test_home_page_and_login_page_are_served(client):
+    home = client.get("/")
+    assert home.status_code == 200 and "Every payment gets a witness" in home.text
+    assert 'href="/login?mode=register"' in home.text
     assert client.get("/login").status_code == 200
+    assert client.get("/static/site.css").status_code == 200
 
 
 def test_status_reports_missing_keys(client, monkeypatch):

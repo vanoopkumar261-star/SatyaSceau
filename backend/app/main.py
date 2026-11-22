@@ -9,7 +9,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session
 
@@ -81,4 +81,4 @@ for module in (routes_merchant, routes_auth, routes_proof, routes_privacy, route
 
 @app.get("/", include_in_schema=False)
 def root():
-    return RedirectResponse("/login")  # the site's front door; API docs stay at /docs
+    return FileResponse(STATIC_DIR / "index.html")  # home page; API docs stay at /docs
