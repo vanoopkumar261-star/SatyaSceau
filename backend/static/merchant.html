@@ -6,7 +6,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>SatyaSceau — Merchant</title>
+<title>SatyaSceau — Dashboard</title>
+<link rel="stylesheet" href="/static/site.css">
 <style>
   :root {
     --bg: #f6f7f9; --surface: #ffffff; --text: #111827; --muted: #6b7280; --line: #e5e7eb;
@@ -24,7 +25,17 @@
   body { margin: 0; background: var(--bg); color: var(--text);
          font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Devanagari", sans-serif; }
   main { max-width: 720px; margin: 0 auto; padding: 16px; }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  main > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0 4px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .stat b { display: block; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--muted); font-size: .8rem; }
+  .stat.g b { color: var(--green); } .stat.a b { color: var(--amber); } .stat.r b { color: var(--red); }
+  ul.recent a { color: inherit; text-decoration: none; }
+  ul.recent a:hover .grow { text-decoration: underline; }
+  .qrbox { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .qrbox a { color: var(--accent); font-weight: 600; }
+  .qrbox img { width: 132px; height: 132px; image-rendering: pixelated; background: #fff; padding: 6px; border-radius: 8px; }
   h1 { font-size: 1.15rem; margin: 0; }
   .shop { color: var(--muted); font-size: .95rem; }
   .conn { font-size: .8rem; padding: 4px 10px; border-radius: 999px; background: var(--idle-bg); color: var(--muted); }
@@ -73,10 +84,18 @@
 </style>
 </head>
 <body>
+<header class="site-header"><div class="site-inner">
+  <a class="site-brand" href="/"><span class="site-mark">✓</span>SatyaSceau</a>
+  <nav class="site-nav">
+    <a href="#" aria-current="page">Dashboard</a>
+    <a href="/login">My shop &amp; QR</a>
+    <button type="button" id="logoutBtn" hidden>Log out</button>
+  </nav>
+</div></header>
 <main>
   <header>
     <div>
-      <h1>SatyaSceau</h1>
+      <h1 id="dashTitle">Live dashboard</h1>
       <div class="shop" id="shop">Merchant screen</div>
     </div>
     <span class="conn" id="conn">Connecting…</span>
@@ -98,6 +117,23 @@
       <div class="reason" id="cardReason">Ask the customer to scan your QR and upload their payment screenshot.</div>
       <div class="meta" id="cardMeta"></div>
     </div>
+
+    <!-- Today at a glance (from the payments this screen knows about) -->
+    <div class="stats" aria-label="Today">
+      <div class="stat g"><b id="statOk">0 · ₹0</b><span id="statOkLabel">Verified today</span></div>
+      <div class="stat a"><b id="statWait">0</b><span id="statWaitLabel">Waiting</span></div>
+      <div class="stat r"><b id="statBad">0</b><span id="statBadLabel">Not verified today</span></div>
+    </div>
+
+    <!-- The shop's QR, always at hand -->
+    <details class="panel" id="qrPanel">
+      <summary id="qrTitle">🧾 Your QR code</summary>
+      <div class="qrbox">
+        <img id="qrImg" alt="Your shop's QR code for customers">
+        <div><p class="muted" id="qrHelp">Customers scan this to upload their payment screenshot.</p>
+          <a id="qrOpen" target="_blank" rel="noopener">Open full size to print</a></div>
+      </div>
+    </details>
 
     <!-- Merchant adds the bank's credit SMS by hand (no forwarder app needed) -->
     <details class="panel" id="pastePanel">
@@ -176,6 +212,7 @@ const TEXT = {
     recent: "हाल के भुगतान", none: "अभी कोई भुगतान नहीं।", record: "रिकॉर्ड देखें",
     pasteTitle: "➕ बैंक SMS खुद जोड़ें", pasteBank: "बैंक", pasteBody: "बैंक का क्रेडिट SMS यहाँ पेस्ट करें",
     pasteAdd: "SMS जोड़ें", pasteOk: "बैंक क्रेडिट जुड़ गया",
+    okToday: "आज सत्यापित", waitNow: "इंतज़ार में", badToday: "आज असत्यापित", qrTitle: "🧾 आपका QR कोड",
     noHindi: "इस डिवाइस पर हिंदी आवाज़ नहीं है — अंग्रेज़ी में बोला जाएगा।",
   },
   en: {
@@ -190,6 +227,7 @@ const TEXT = {
     recent: "Recent payments", none: "No payments yet.", record: "View signed record",
     pasteTitle: "➕ Add bank SMS by hand", pasteBank: "Bank", pasteBody: "Paste the bank's credit SMS",
     pasteAdd: "Add SMS", pasteOk: "Bank credit added",
+    okToday: "Verified today", waitNow: "Waiting", badToday: "Not verified today", qrTitle: "🧾 Your QR code",
     noHindi: "",
   },
 };
@@ -269,8 +307,23 @@ function render() {
   $("#pasteBankLabel").textContent = t.pasteBank;
   $("#pasteBodyLabel").textContent = t.pasteBody;
   $("#pasteBtn").textContent = t.pasteAdd;
+  $("#qrTitle").textContent = t.qrTitle;
+
+  // Today at a glance (local day)
+  const today = new Date().toDateString();
+  let okN = 0, okSum = 0, waitN = 0, badN = 0;
+  for (const x of cases.values()) {
+    if (x.status === "WAITING") { waitN++; continue; }
+    if (new Date(x.created_at).toDateString() !== today) continue;
+    if (x.status === "VERIFIED") { okN++; okSum += Number(x.amount) || 0; } else badN++;
+  }
+  $("#statOk").textContent = `${okN} · ${rupees(okSum).replace(".00", "")}`;
+  $("#statWait").textContent = String(waitN);
+  $("#statBad").textContent = String(badN);
+  $("#statOkLabel").textContent = t.okToday; $("#statWaitLabel").textContent = t.waitNow; $("#statBadLabel").textContent = t.badToday;
+
   const list = $("#recent");
-  const rows = [...cases.values()].sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).slice(0, 10);
+  const rows = [...cases.values()].sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).slice(0, 15);
   list.replaceChildren();
   if (!rows.length) {
     const li = document.createElement("li"); li.className = "muted"; li.textContent = t.none; list.append(li);
@@ -281,7 +334,15 @@ function render() {
     const label = document.createElement("span"); label.className = "grow"; label.textContent = t[r.status] + (r.utr ? " · " + r.utr : "");
     const amt = document.createElement("span"); amt.className = "num"; amt.textContent = rupees(r.amount);
     const when = document.createElement("span"); when.className = "muted"; when.textContent = time(r.created_at);
-    li.append(dot, label, amt, when);
+    if (r.record_url) {               // decided cases link to their signed record
+      const a = document.createElement("a");
+      a.href = r.record_url; a.target = "_blank"; a.rel = "noopener"; a.title = t.record;
+      a.style.cssText = "display:contents";
+      a.append(dot, label, amt, when);
+      li.append(a);
+    } else {
+      li.append(dot, label, amt, when);
+    }
     list.append(li);
   }
 }
@@ -395,7 +456,7 @@ $("#pasteBtn").addEventListener("click", async () => {
 
 async function poll() {
   try {
-    const r = await fetch(`/api/merchants/${encodeURIComponent(merchantId)}/cases?k=${encodeURIComponent(screenKey)}`, { cache: "no-store" });
+    const r = await fetch(`/api/merchants/${encodeURIComponent(merchantId)}/cases?k=${encodeURIComponent(screenKey)}&limit=50`, { cache: "no-store" });
     if (r.status === 403) return problem("Invalid screen link", "This link's key is wrong or old. Open the merchant link you got at sign-up.");
     if (r.status === 404) return problem("Shop not found", "Check the merchant link.");
     if (!r.ok) throw new Error(r.status);
@@ -481,6 +542,17 @@ $("#openLive").addEventListener("click", () => location.assign(setupUrl));   // 
   }
   screenKey = fromHash || store.get("satyasceau.key." + merchantId);
   if (!screenKey) return problem("Screen key missing", "Open the full merchant link you got at sign-up (it ends with #k=…).");
+  const qrUrl = `/api/merchants/${encodeURIComponent(merchantId)}/qr.png`;
+  $("#qrImg").src = qrUrl; $("#qrOpen").href = qrUrl;
+  try {
+    if (localStorage.getItem("satyasceau.session")) {   // came in through an account: offer log out
+      $("#logoutBtn").hidden = false;
+      $("#logoutBtn").addEventListener("click", () => {
+        try { localStorage.removeItem("satyasceau.session"); } catch { /* ignore */ }
+        location.assign("/login");
+      });
+    }
+  } catch { /* storage blocked */ }
   show("live");
   render();
   const first = await poll();

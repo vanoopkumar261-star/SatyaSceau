@@ -7,6 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>SatyaSceau — Sign in</title>
+<link rel="stylesheet" href="/static/site.css">
 <style>
   :root {
     --bg: #f6f7f9; --surface: #ffffff; --text: #111827; --muted: #6b7280; --line: #e5e7eb;
@@ -56,9 +57,16 @@
 </style>
 </head>
 <body>
+<header class="site-header"><div class="site-inner">
+  <a class="site-brand" href="/"><span class="site-mark">✓</span>SatyaSceau</a>
+  <nav class="site-nav">
+    <a href="/">Home</a>
+    <a id="navDash" href="#" hidden>Dashboard</a>
+  </nav>
+</div></header>
 <main>
   <div class="brand">
-    <h1>SatyaSceau</h1>
+    <h1 id="pageTitle">Welcome back</h1>
     <p>Every payment gets a witness.</p>
   </div>
 
@@ -113,7 +121,7 @@
     <div class="msg warn" id="companyNote" hidden>Company verification (Razorpay webhooks) is our next phase. Your shop verifies with bank SMS meanwhile.</div>
     <img class="qr" id="shopQr" alt="Your shop's QR code: customers scan it to upload their payment screenshot">
     <p class="muted" style="text-align:center">Print this QR and keep it at the counter.<br><code id="shopPay"></code></p>
-    <button class="primary" id="openLive" type="button">Open live screen</button>
+    <button class="primary" id="openLive" type="button">Open my dashboard</button>
     <details style="margin-top:14px">
       <summary class="muted">SMS forwarder settings</summary>
       <p class="muted">POST <code id="fwdUrl"></code><br>Header <code>X-Token: <span id="fwdToken"></span></code><br>
@@ -157,6 +165,7 @@ function setMode(next) {
   $("#tabLogin").setAttribute("aria-selected", String(next === "login"));
   $("#tabRegister").setAttribute("aria-selected", String(next === "register"));
   $("#authBtn").textContent = next === "login" ? "Log in" : "Create account";
+  $("#pageTitle").textContent = next === "login" ? "Welcome back" : "Create your account";
   $("#password").autocomplete = next === "login" ? "current-password" : "new-password";
   msg($("#authMsg"), "");
 }
@@ -213,12 +222,15 @@ function renderShop() {
   $("#fwdUrl").textContent = new URL("/api/sms", shop.pay_url).href;
   $("#fwdToken").textContent = shop.api_token;
   $("#fwdConsent").textContent = shop.sms_consent ? "on" : "off (paste SMS by hand on the live screen)";
+  $("#pageTitle").textContent = "My shop";
+  $("#navDash").href = shop.screen_path; $("#navDash").hidden = false;
   show("shopView");
 }
 $("#openLive").addEventListener("click", () => location.assign(shop.screen_path));
 
 function logout(reason) {
   session = null; shop = null; store.clear();
+  $("#navDash").hidden = true;
   setMode("login"); show("authView");
   if (reason) msg($("#authMsg"), reason, "warn");
 }
@@ -242,6 +254,7 @@ async function loadMe() {
     $("#authBtn").disabled = true;
     return;
   }
+  if (new URLSearchParams(location.search).get("mode") === "register") setMode("register");
   if (session?.access_token) await loadMe(); else show("authView");
 })();
 </script>
