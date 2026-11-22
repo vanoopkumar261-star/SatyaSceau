@@ -1,41 +1,43 @@
 /* Hallmark · shape: kept · genre: modern-minimal · theme: brand · redesign: full
- * paper: #E2F3E9 sage · accent: #F7FA66 lemon · display: Noto Sans · body: Noto Sans + Noto Sans Devanagari · hero: Stage · nav: edge-aligned · footer: mast · signature: the witness slip (lemon slip + passbook UTR + seal)
- * axes: sage/noto/lemon · posture: stage · contrast: pass · fold: pass · v2.0.0 */
+ * paper: #EAF2F8 sky wash · accent: #FDF5AA cream · display: Noto Sans · body: Noto Sans + Noto Sans Devanagari · hero: Stage · nav: edge-aligned · footer: mast · signature: the witness slip (cream slip + passbook UTR + seal)
+ * axes: navy/noto/cream · posture: stage · contrast: pass · fold: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: P4 H4 E4 S5 R4 V4 · weakest: E, emoji removed for Material Symbols, verdict colours kept to status only */
 /* Hallmark · waive 24b · the off-scale values are insets inside pills, chips, nav links and fields only · SatyaSceau control labels are centred optically in 48px pills; every layout gap stays on the 4px scale */
-/* Hallmark · dismissed WARN 74 · #0F172A ink comes from the team's Stitch design system, a chosen brand token */
+/* Palette (team's choice): two colours, navy blue #113F67 / #34699A / #58A0C8 and cream #FDF5AA.
+   Token names (sage, teal, highlight) are kept so no page changes; only their values moved.
+   Verdict green / amber / red stay: they carry meaning, not decoration. */
 /* SatyaSceau shared system. Tokens -> base -> chrome -> components. Pages only add layout. See DESIGN.md. */
 
 /* ---------- tokens ---------- */
 :root {
   color-scheme: light;
-  --sage: #E2F3E9;        /* canvas: the QR standee mint */
-  --sage-2: #F2FAF5;      /* inset fields, quiet fills */
-  --sage-3: #D7EDE0;      /* pressed / selected fills */
+  --sage: #EAF2F8;        /* canvas: a pale wash of the sky blue */
+  --sage-2: #F5F9FC;      /* inset fields, quiet fills */
+  --sage-3: #DCE9F3;      /* pressed / selected fills */
   --paper: #FFFFFF;       /* cards: receipt paper */
-  --ink: #0F172A;         /* text and primary pills: stamp ink */
-  --ink-2: #3F5549;       /* supporting text */
-  --ink-3: #647A6E;       /* meta */
+  --ink: #113F67;         /* text and primary pills: navy */
+  --ink-2: #34699A;       /* supporting text: blue */
+  --ink-3: #4A6F90;       /* meta */
   --on-ink: #FFFFFF;
-  --rule: #CBE2D5;        /* hairlines */
-  --highlight: #F7FA66;   /* the lemon slip: one highlight */
-  --on-highlight: #0F172A;
-  --teal: #0F766E;        /* links, focus */
+  --rule: #C9DCEB;        /* hairlines */
+  --highlight: #FDF5AA;   /* the cream slip: one highlight */
+  --on-highlight: #113F67;
+  --teal: #34699A;        /* links, focus, accents: blue */
   --ok: #15803D;   --ok-tint: #DCFCE7;   --on-ok-tint: #14532D;
   --wait: #B45309; --wait-tint: #FEF3C7; --on-wait-tint: #78350F;
   --no: #B91C1C;   --no-tint: #FEE2E2;   --no-strong: #DC2626; --on-no-tint: #7F1D1D;
   --demo: #B91C1C;        /* demo-backup banner */
   --white: #FFFFFF;       /* QR tiles stay white in both modes */
-  --shadow-card: 0 0 0 1px rgba(15, 41, 30, .05), 0 1px 2px -1px rgba(15, 41, 30, .08), 0 8px 24px -12px rgba(15, 41, 30, .18);
-  --shadow-lift: 0 0 0 1px rgba(15, 41, 30, .06), 0 2px 4px rgba(15, 41, 30, .06), 0 18px 40px -18px rgba(15, 41, 30, .30);
-  --focus: #0F766E;
+  --shadow-card: 0 0 0 1px rgba(17, 63, 103, .05), 0 1px 2px -1px rgba(17, 63, 103, .08), 0 8px 24px -12px rgba(17, 63, 103, .18);
+  --shadow-lift: 0 0 0 1px rgba(17, 63, 103, .06), 0 2px 4px rgba(17, 63, 103, .06), 0 18px 40px -18px rgba(17, 63, 103, .30);
+  --focus: #34699A;
 
   --font-body: "Noto Sans", "Noto Sans Devanagari", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Noto Sans", "Noto Sans Devanagari", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "Source Code Pro", ui-monospace, SFMono-Regular, Consolas, monospace;
   --font-icon: "Material Symbols Outlined";
-  --mark-fg: #F7FA66;      /* the logo check on the ink tile */
-  --knob-shadow: 0 1px 2px rgba(15, 41, 30, .25);
+  --mark-fg: #FDF5AA;      /* the logo check on the navy tile */
+  --knob-shadow: 0 1px 2px rgba(17, 63, 103, .25);
 
   --t-xs: 12px; --t-sm: 14px; --t-md: 16px; --t-lg: 18px; --t-xl: 22px; --t-2xl: 28px; --t-3xl: 36px; --t-display: 44px;
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-12: 48px; --s-16: 64px;
@@ -47,19 +49,19 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {   /* <html data-theme="light"> forces light (screenshots, a future toggle) */
     color-scheme: dark;
-    --sage: #0B1410; --sage-2: #172820; --sage-3: #1E3228;
-    --paper: #122019;
-    --ink: #ECFDF5; --ink-2: #9BB5A6; --ink-3: #7E9A8B; --on-ink: #0B1410;
-    --rule: #263E32;
-    --highlight: #E8EC4F; --on-highlight: #0B1410;
-    --teal: #5EEAD4;
+    --sage: #0A1C2E; --sage-2: #12283F; --sage-3: #183352;   /* deep navy */
+    --paper: #0F2438;
+    --ink: #F3F8FC; --ink-2: #A9C6DD; --ink-3: #87A8C3; --on-ink: #0A1C2E;
+    --rule: #1F3C5A;
+    --highlight: #FDF5AA; --on-highlight: #113F67;
+    --teal: #58A0C8;                                          /* sky blue reads on navy */
     --ok: #4ADE80;   --ok-tint: #052E16;   --on-ok-tint: #DCFCE7;
     --wait: #FBBF24; --wait-tint: #451A03; --on-wait-tint: #FEF3C7;
     --no: #F87171;   --no-tint: #450A0A;   --no-strong: #F87171; --on-no-tint: #FEE2E2;
     --shadow-card: 0 0 0 1px rgba(255, 255, 255, .07);
     --shadow-lift: 0 0 0 1px rgba(255, 255, 255, .09);
-    --focus: #5EEAD4;
-    --mark-fg: #0B1410;      /* dark mode: the tile turns light, so the check turns dark */
+    --focus: #58A0C8;
+    --mark-fg: #0A1C2E;     /* dark mode: the tile turns light, so the check turns dark */
     --knob-shadow: 0 1px 2px rgba(0, 0, 0, .5);
   }
 }
