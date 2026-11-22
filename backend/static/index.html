@@ -95,6 +95,64 @@
   .cta { padding: var(--s-12) var(--s-8); text-align: left; display: grid; gap: var(--s-2); }
   .cta .actions { margin-top: var(--s-4); }
   .site-footer .credit { font-size: var(--t-xs); }
+
+  /* ---- gradients: all mixed from the theme tokens, so both modes follow ---- */
+  /* hero: a lemon glow behind the product, a teal glow behind the words, under the flowing lines */
+  .hero-band { background:
+      radial-gradient(60% 80% at 78% 40%, color-mix(in srgb, var(--highlight) 30%, transparent), transparent 70%),
+      radial-gradient(50% 70% at 12% 30%, color-mix(in srgb, var(--teal) 16%, transparent), transparent 70%),
+      var(--sage); }
+  /* paper bands fade in from the canvas instead of starting on a hard edge */
+  .band { background: linear-gradient(180deg, var(--paper), color-mix(in srgb, var(--paper) 82%, var(--sage))); }
+  /* the step screens sit on a soft wash, lemon at the top */
+  .shot { background: linear-gradient(160deg, color-mix(in srgb, var(--highlight) 22%, var(--sage-2)), var(--sage-2) 60%); }
+  /* the verdict tiles light from one corner */
+  .v.ok   { background: linear-gradient(145deg, color-mix(in srgb, var(--ok) 20%, var(--ok-tint)), var(--ok-tint) 70%); }
+  .v.wait { background: linear-gradient(145deg, color-mix(in srgb, var(--wait) 20%, var(--wait-tint)), var(--wait-tint) 70%); }
+  .v.no   { background: linear-gradient(145deg, color-mix(in srgb, var(--no) 20%, var(--no-tint)), var(--no-tint) 70%); }
+  /* the closing slip: lemon deepening into teal at the far corner, with a slow light sweep */
+  .cta { position: relative; overflow: hidden; isolation: isolate;
+         background: linear-gradient(120deg, var(--highlight) 45%, color-mix(in srgb, var(--highlight) 70%, var(--teal))); }
+  .cta::after { content: ""; position: absolute; inset: -50% auto -50% -40%; width: 35%; z-index: -1; pointer-events: none;
+                background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--paper) 45%, transparent), transparent);
+                transform: translateX(-100%) rotate(12deg); }
+  .photo { position: relative; }
+  .photo::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+                  background: linear-gradient(200deg, transparent 55%, color-mix(in srgb, var(--teal) 28%, transparent)); }
+
+  /* ---- motion: transform and opacity only; everything is visible without it ---- */
+  @media (prefers-reduced-motion: no-preference) {
+    /* hero enters in order: headline, sentence, actions, then the product */
+    @keyframes rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+    .hero h1      { animation: rise 600ms cubic-bezier(.2,.7,.2,1) both; }
+    .hero .lead   { animation: rise 600ms 90ms cubic-bezier(.2,.7,.2,1) both; }
+    .hero .actions{ animation: rise 600ms 180ms cubic-bezier(.2,.7,.2,1) both; }
+    .hero .stage  { animation: rise 800ms 260ms cubic-bezier(.2,.7,.2,1) both; }
+    /* the dashboard on its slip breathes very slightly */
+    @keyframes float { 50% { transform: translateY(-6px); } }
+    .stage picture { animation: float 6s 1.2s ease-in-out infinite; }
+    /* the spoken line pulses like it is being said */
+    @keyframes speak { 50% { transform: scale(1.18); } }
+    .stage figcaption .ms { animation: speak 1.6s ease-in-out infinite; }
+
+    /* sections slide in as they scroll into view (only once the script has marked the page) */
+    .js-reveal .reveal { opacity: 0; transform: translateY(24px); transition: opacity 600ms ease-out, transform 600ms cubic-bezier(.2,.7,.2,1); }
+    .js-reveal .reveal.in { opacity: 1; transform: none; }
+
+    /* cards lift under the pointer; the screen inside eases up */
+    .step, .plan, .v { transition: transform 200ms ease-out, box-shadow 200ms ease-out; }
+    .step:hover, .plan:hover, .v:hover { transform: translateY(-4px); box-shadow: var(--shadow-lift); }
+    .shot img { transition: transform 400ms cubic-bezier(.2,.7,.2,1); }
+    .step:hover .shot img { transform: translateY(-8px) scale(1.02); }
+    .photo img { transition: transform 800ms cubic-bezier(.2,.7,.2,1); }
+    .photo:hover img { transform: scale(1.04); }
+    .item .ms, .promises .ms { transition: transform 200ms ease-out; }
+    .item:hover .ms, .promises li:hover .ms { transform: scale(1.15) rotate(-6deg); }
+
+    /* the closing slip's light sweeps across every few seconds */
+    @keyframes sweep { 0%, 60% { transform: translateX(-100%) rotate(12deg); } 100% { transform: translateX(420%) rotate(12deg); } }
+    .cta::after { animation: sweep 5s ease-in-out infinite; }
+  }
 </style>
 </head>
 <body>
@@ -231,6 +289,29 @@
       const cta = document.getElementById("navCta"); cta.textContent = "Dashboard"; cta.href = "/login";
     }
   } catch { /* storage blocked: keep defaults */ }
+
+  // Scroll reveal: mark headings, cards and tiles, then fade each in once as it enters the view.
+  // Content stays visible if this never runs (the hidden state needs the .js-reveal class).
+  (function () {
+    if (!("IntersectionObserver" in window)) return;
+    const targets = document.querySelectorAll("main section h2, .item, .step, .v, .photo, .promises li, .plan, .cta");
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) {
+        const el = e.target;
+        el.classList.add("in"); io.unobserve(el);
+        // once it has arrived, hand the element back to its own hover transitions
+        setTimeout(() => { el.classList.remove("reveal", "in"); el.style.transitionDelay = ""; }, 950);
+      }
+    }, { rootMargin: "0px 0px -8% 0px" });
+    targets.forEach((el) => {
+      el.classList.add("reveal");
+      // siblings in a row arrive one after another
+      const i = [...el.parentElement.children].indexOf(el);
+      el.style.transitionDelay = Math.min(i, 3) * 90 + "ms";
+      io.observe(el);
+    });
+    document.documentElement.classList.add("js-reveal");
+  })();
 
   // Hero background: FluxLines in the brand's own colours, read from the theme tokens,
   // following light/dark mode. Kept faint so the headline always wins.

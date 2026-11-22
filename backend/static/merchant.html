@@ -15,7 +15,11 @@
 <style>
   /* Intent: a shopkeeper glancing from a metre away mid-handover. Focal: the verdict card.
      Signature: lemon "today, witnessed" slip + passbook UTRs + seal on verified. */
-  main { max-width: var(--container); margin: 0 auto; padding: var(--s-6) var(--gutter) var(--s-16); }
+  main { max-width: var(--container); margin: 0 auto; padding: var(--s-6) var(--gutter) var(--s-16); position: relative; z-index: 1; }
+  /* GhostFibers (React Bits, ported to plain JS): glowing fibre ribbons drifting behind the whole dashboard.
+     The cards are opaque, so the fibres only show in the gaps and never sit under a figure. Decorative only. */
+  .ghost-fibers-container { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+  .ghost-fibers-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
   .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-5); }
   .page-head h1 { font-size: var(--t-2xl); }
   .shop { color: var(--ink-2); font-weight: 600; margin-top: 2px; }
@@ -118,6 +122,7 @@
 </style>
 </head>
 <body>
+<div id="dashFibers" aria-hidden="true"></div>
 <header class="site-header"><div class="site-inner">
   <a class="site-brand" href="/"><span class="site-mark"><span class="ms" aria-hidden="true">verified</span></span>SatyaSceau</a>
   <nav class="site-nav">
@@ -718,6 +723,31 @@ $("#openLive").addEventListener("click", () => location.assign(setupUrl));   // 
   if (first === true) connect();
   else if (first === false) startPolling();   // "fatal" = bad link, already shown
 })();
+</script>
+<script src="/static/js/ghost-fibers.js"></script>
+<script>
+  // Dashboard background: GhostFibers in the brand's teal and lemon, read from the theme tokens,
+  // following light/dark. Kept light (fewer threads) because this screen stays open all day.
+  (function () {
+    const el = document.getElementById("dashFibers");
+    if (!el || !window.GhostFibers) return;
+    const root = document.documentElement;
+    const dark = matchMedia("(prefers-color-scheme: dark)");
+    const tok = (n) => getComputedStyle(root).getPropertyValue(n).trim();
+    const look = () => {
+      const isDark = root.dataset.theme ? root.dataset.theme === "dark" : dark.matches;
+      return isDark
+        ? { lightMode: false, glowColor: tok("--teal"), secondaryColor: tok("--highlight"), brightness: 0.75, glow: 0.7 }
+        : { lightMode: true, glowColor: tok("--teal"), secondaryColor: tok("--ink"), brightness: 1.1, glow: 0 };
+    };
+    const fibers = new GhostFibers(el, {
+      ...look(), gradient: "along", layers: 3, threads: 48, density: 0.8, twist: 1.2,
+      fiberStyle: "dots", depthOfField: 0.85, hoverEffect: "focus", speed: 0.35, flow: 0.3,
+      particles: 0.4, vignette: 0.35, grain: 0.04,
+    });
+    dark.addEventListener("change", () => fibers.setOptions(look()));
+    new MutationObserver(() => fibers.setOptions(look())).observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+  })();
 </script>
 </body>
 </html>
