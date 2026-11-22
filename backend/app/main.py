@@ -72,7 +72,35 @@ async def lifespan(app: FastAPI):
             await task
 
 
+class RevalidatePages:
+    """Pure ASGI middleware: HTML pages and our CSS get `Cache-Control: no-cache` (browser re-checks via ETag).
+
+    Without it, browsers reuse stale pages after an update (seen during the redesign). Pure ASGI
+    rather than @app.middleware so the SSE stream is never buffered. Responses that already set
+    Cache-Control (the record page's no-store) keep theirs.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                headers = message.setdefault("headers", [])
+                names = {k.lower() for k, _ in headers}
+                ctype = next((v for k, v in headers if k.lower() == b"content-type"), b"")
+                if b"cache-control" not in names and (ctype.startswith(b"text/html") or ctype.startswith(b"text/css")):
+                    headers.append((b"cache-control", b"no-cache"))
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+
 app = FastAPI(title="SatyaSceau", version=settings.APP_VERSION, lifespan=lifespan)
+app.add_middleware(RevalidatePages)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 for module in (routes_merchant, routes_auth, routes_proof, routes_privacy, routes_sms, routes_records):

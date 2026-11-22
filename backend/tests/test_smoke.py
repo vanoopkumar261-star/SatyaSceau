@@ -93,3 +93,10 @@ def test_publish_reaches_subscriber():
         assert payload["record_url"] == "/record/c1"
     finally:
         events.unsubscribe("m1", queue)
+
+
+def test_pages_and_css_revalidate_but_record_keeps_no_store(client):
+    """Browsers kept a stale dashboard after an update: pages and our CSS must say no-cache."""
+    assert client.get("/merchant").headers["cache-control"] == "no-cache"
+    assert client.get("/static/css/theme.css").headers["cache-control"] == "no-cache"
+    assert client.get("/health").headers.get("cache-control") is None  # JSON untouched
