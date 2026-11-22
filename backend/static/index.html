@@ -30,6 +30,12 @@
   /* hero */
   .hero { display: grid; gap: var(--s-8); align-items: center; padding-block: 56px 64px; }   /* block only: keep .wrap's side gutter */
   @media (min-width: 920px) { .hero { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); } }
+  /* FluxLines (React Bits, ported to plain JS): flowing lines behind the hero, purely decorative.
+     Without WebGL2, or with scripting off, the band is simply the sage canvas. */
+  .hero-band { position: relative; isolation: isolate; }
+  .hero-band > .hero { position: relative; z-index: 1; }
+  .flux-lines-container { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+  .flux-lines-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
   .stage { padding: var(--s-6); display: grid; }
   .stage picture, .shot picture { display: block; }
   .stage img { width: 100%; border-radius: var(--r-card); box-shadow: var(--shadow-lift); }
@@ -103,6 +109,8 @@
 </div></header>
 
 <main>
+  <div class="hero-band">
+  <div id="heroFlux" class="flux-lines-container" aria-hidden="true"></div>
   <div class="wrap hero">
     <div>
       <h1>Every payment gets a witness.</h1>
@@ -120,6 +128,7 @@
       </picture>
       <figcaption><span class="ms" aria-hidden="true">volume_up</span>“150 रुपये का भुगतान सत्यापित हुआ”</figcaption>
     </figure>
+  </div>
   </div>
 
   <section class="band">
@@ -213,6 +222,7 @@
   <span class="credit">Market photo: <a href="https://commons.wikimedia.org/wiki/File:Matin_ensoleill%C3%A9_au_march%C3%A9_de_la_Terrasse.jpg">Touam (Hervé Agnoux)</a>, <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>, via Wikimedia Commons.</span>
 </div></footer>
 
+<script src="/static/js/flux-lines.js"></script>
 <script>
   // Logged in already? Point the header at the dashboard instead of Register.
   try {
@@ -221,6 +231,25 @@
       const cta = document.getElementById("navCta"); cta.textContent = "Dashboard"; cta.href = "/login";
     }
   } catch { /* storage blocked: keep defaults */ }
+
+  // Hero background: FluxLines in the brand's own colours, read from the theme tokens,
+  // following light/dark mode. Kept faint so the headline always wins.
+  (function () {
+    const el = document.getElementById("heroFlux");
+    if (!el || !window.FluxLines) return;
+    const root = document.documentElement;
+    const dark = matchMedia("(prefers-color-scheme: dark)");
+    const tok = (n) => getComputedStyle(root).getPropertyValue(n).trim();
+    const look = () => {
+      const isDark = root.dataset.theme ? root.dataset.theme === "dark" : dark.matches;
+      return isDark
+        ? { lightMode: false, colors: [tok("--teal"), tok("--highlight"), tok("--teal")], opacity: 0.55, glow: 1.6 }
+        : { lightMode: true, colors: [tok("--teal"), tok("--ink"), tok("--teal")], opacity: 0.22, glow: 2 };
+    };
+    const flux = new FluxLines(el, { ...look(), rimWidth: 0.2, lineWidth: 1, flowDirection: "down", speed: 0.35 });
+    dark.addEventListener("change", () => flux.setOptions(look()));
+    new MutationObserver(() => flux.setOptions(look())).observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+  })();
 </script>
 </body>
 </html>
