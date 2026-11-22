@@ -2,6 +2,8 @@
  * paper: #E2F3E9 sage · accent: #F7FA66 lemon · display: Noto Sans · body: Noto Sans + Noto Sans Devanagari · hero: Stage · nav: edge-aligned · footer: mast · signature: the witness slip (lemon slip + passbook UTR + seal)
  * axes: sage/noto/lemon · posture: stage · contrast: pass · fold: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: P4 H4 E4 S5 R4 V4 · weakest: E, emoji removed for Material Symbols, verdict colours kept to status only */
+/* Hallmark · waive 24b · the off-scale values are insets inside pills, chips, nav links and fields only · SatyaSceau control labels are centred optically in 48px pills; every layout gap stays on the 4px scale */
+/* Hallmark · dismissed WARN 74 · #0F172A ink comes from the team's Stitch design system, a chosen brand token */
 /* SatyaSceau shared system. Tokens -> base -> chrome -> components. Pages only add layout. See DESIGN.md. */
 
 /* ---------- tokens ---------- */
@@ -31,6 +33,9 @@
   --font-body: "Noto Sans", "Noto Sans Devanagari", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Noto Sans", "Noto Sans Devanagari", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "Source Code Pro", ui-monospace, SFMono-Regular, Consolas, monospace;
+  --font-icon: "Material Symbols Outlined";
+  --mark-fg: #F7FA66;      /* the logo check on the ink tile */
+  --knob-shadow: 0 1px 2px rgba(15, 41, 30, .25);
 
   --t-xs: 12px; --t-sm: 14px; --t-md: 16px; --t-lg: 18px; --t-xl: 22px; --t-2xl: 28px; --t-3xl: 36px; --t-display: 44px;
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-12: 48px; --s-16: 64px;
@@ -40,7 +45,7 @@
   --gutter: 24px;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {   /* <html data-theme="light"> forces light (screenshots, a future toggle) */
     color-scheme: dark;
     --sage: #0B1410; --sage-2: #172820; --sage-3: #1E3228;
     --paper: #122019;
@@ -54,6 +59,8 @@
     --shadow-card: 0 0 0 1px rgba(255, 255, 255, .07);
     --shadow-lift: 0 0 0 1px rgba(255, 255, 255, .09);
     --focus: #5EEAD4;
+    --mark-fg: #0B1410;      /* dark mode: the tile turns light, so the check turns dark */
+    --knob-shadow: 0 1px 2px rgba(0, 0, 0, .5);
   }
 }
 
@@ -80,7 +87,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 
 /* ---------- icons (Material Symbols, always beside a word) ---------- */
-.ms { font-family: "Material Symbols Outlined"; font-weight: normal; font-style: normal; font-size: 1.25em; line-height: 1;
+.ms { font-family: var(--font-icon); font-weight: normal; font-style: normal; font-size: 1.25em; line-height: 1;
       letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap; direction: ltr;
       font-feature-settings: "liga"; -webkit-font-smoothing: antialiased; font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
       vertical-align: -0.2em; flex: none; }
@@ -88,13 +95,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---------- chrome: header + footer (class names kept from site.css) ---------- */
 .site-header { position: sticky; top: 0; z-index: 10; background: var(--sage); border-bottom: 1px solid var(--rule); }
-.site-inner { max-width: var(--container); margin: 0 auto; padding: 10px var(--gutter); display: flex; align-items: center; gap: var(--s-3); }
+.site-inner { max-width: var(--container); margin: 0 auto; padding: 10px var(--gutter); display: flex; align-items: center; gap: var(--s-2) var(--s-3);
+              flex-wrap: wrap; }   /* on a narrow phone the whole nav drops below the wordmark, never item by item */
 .site-brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; font-size: var(--t-lg); color: var(--ink);
               text-decoration: none; letter-spacing: -0.01em; }
 .site-mark { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--ink);
-             color: var(--highlight); font-size: 20px; }
+             color: var(--mark-fg); font-size: 20px; }
 .site-mark .ms { font-size: 20px; vertical-align: 0; }
-.site-nav { margin-left: auto; display: flex; align-items: center; gap: var(--s-1); flex-wrap: wrap; }
+.site-nav { margin-left: auto; display: flex; align-items: center; gap: var(--s-1); flex-wrap: nowrap; }
 .site-nav a, .site-nav button { font: inherit; font-size: var(--t-sm); font-weight: 600; color: var(--ink-2); text-decoration: none;
                                 padding: 9px 14px; border-radius: var(--r-pill); background: none; border: 0; cursor: pointer;
                                 min-height: 40px; display: inline-flex; align-items: center; gap: 6px;
@@ -117,14 +125,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .surface { background: var(--paper); border-radius: var(--r-card); box-shadow: var(--shadow-card); }
 .slip { background: var(--highlight); color: var(--on-highlight); border-radius: var(--r-hero); }
 .slip .ink-2 { color: var(--on-highlight); opacity: .72; }
+/* On the lemon slip the primary stays dark ink in both modes and the secondary becomes an outline,
+   so the hierarchy never inverts in dark mode. */
+.slip .btn-ink { background: var(--on-highlight); color: var(--highlight); }
+.slip .btn-paper { background: transparent; color: var(--on-highlight); box-shadow: inset 0 0 0 2px var(--on-highlight); }
 
 /* ---------- buttons: ink pill (primary), paper pill, lemon pill ---------- */
 .btn, button.primary { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2); min-height: 48px;
                        padding: 12px 22px; border-radius: var(--r-pill); border: 0; cursor: pointer; text-decoration: none;
-                       font-weight: 700; font-size: var(--t-md); line-height: 1.2;
+                       font-weight: 700; font-size: var(--t-md); line-height: 1.2; white-space: nowrap;
                        transition: transform .15s var(--ease), background-color .15s var(--ease), opacity .15s var(--ease); }
 .btn:active, button.primary:active { transform: scale(0.97); }
-.btn[disabled], button.primary[disabled] { opacity: .5; cursor: default; transform: none; }
+.btn[disabled], button.primary[disabled] { background: var(--sage-3); color: var(--ink-3); box-shadow: none; cursor: not-allowed; transform: none; }
 .btn-ink, button.primary { background: var(--ink); color: var(--on-ink); }
 .btn-ink:hover, button.primary:hover { transform: translateY(-1px); }
 .btn-paper { background: var(--paper); color: var(--ink); box-shadow: var(--shadow-card); }
@@ -151,7 +163,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .field-label { display: block; font-weight: 600; font-size: var(--t-sm); margin: var(--s-4) 0 6px; color: var(--ink); }
 .field, input:not([type]), input[type=email], input[type=password], input[type=text], input[type=number], select, textarea {
   width: 100%; min-height: 48px; padding: 12px 14px; border-radius: var(--r-ctl); border: 1px solid var(--rule);
-  background: var(--sage-2); color: var(--ink); transition: border-color .15s var(--ease), box-shadow .15s var(--ease); }
+  background: var(--sage-2); color: var(--ink); transition: border-color .15s var(--ease); }   /* the focus ring itself is instant */
 input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; border-color: var(--teal);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 25%, transparent); }
 textarea { min-height: 96px; resize: vertical; }
@@ -174,7 +186,7 @@ input[type=file]::file-selector-button { font: inherit; font-weight: 700; border
 .switch input { appearance: none; -webkit-appearance: none; width: 40px; height: 24px; border-radius: var(--r-pill); margin: 0;
                 background: var(--sage-3); position: relative; cursor: pointer; flex: none; transition: background-color .15s var(--ease); }
 .switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
-                       background: var(--paper); box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform .15s var(--ease); }
+                       background: var(--paper); box-shadow: var(--knob-shadow); transition: transform .15s var(--ease); }
 .switch input:checked { background: var(--ink); }
 .switch input:checked::after { transform: translateX(16px); }
 

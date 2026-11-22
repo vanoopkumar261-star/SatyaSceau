@@ -39,7 +39,7 @@
   .status { display: grid; grid-template-columns: auto 1fr; column-gap: var(--s-3); align-items: center; padding: var(--s-5);
             border-radius: var(--r-card); font-weight: 800; font-size: var(--t-xl); background: var(--paper); box-shadow: var(--shadow-card);
             border: 2px solid transparent; }
-  .status::before { grid-row: span 2; font-family: "Material Symbols Outlined"; font-size: 40px; font-weight: 400;
+  .status::before { grid-row: span 2; font-family: var(--font-icon); font-size: 40px; font-weight: 400;
                     font-variation-settings: "FILL" 1; content: "hourglass_top"; }
   .status small { grid-column: 2; display: block; margin-top: 2px; font-weight: 500; font-size: var(--t-sm); }
   .status.WAITING { background: var(--wait-tint); color: var(--on-wait-tint); border-color: var(--wait); }
@@ -50,7 +50,7 @@
   .status.NOT_VERIFIED::before { color: var(--no); content: "cancel"; }
   .error { display: flex; gap: var(--s-2); align-items: flex-start; background: var(--no-tint); color: var(--on-no-tint);
            border-radius: var(--r-tile); padding: 12px 14px; font-weight: 600; }
-  .error::before { font-family: "Material Symbols Outlined"; font-size: 22px; content: "error"; font-weight: 400; }
+  .error::before { font-family: var(--font-icon); font-size: 22px; content: "error"; font-weight: 400; }
   .again { align-self: center; }
   .privacy { display: flex; gap: var(--s-2); align-items: flex-start; justify-content: center; color: var(--ink-3); font-size: var(--t-xs);
              text-align: center; padding: var(--s-4) var(--gutter) var(--s-6); max-width: 480px; margin: 0 auto; }

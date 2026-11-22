@@ -42,7 +42,7 @@ def test_home_page_and_login_page_are_served(client):
     assert home.status_code == 200 and "Every payment gets a witness" in home.text
     assert 'href="/login?mode=register"' in home.text
     assert client.get("/login").status_code == 200
-    assert client.get("/static/site.css").status_code == 200
+    assert client.get("/static/css/theme.css").status_code == 200   # the shared design system (replaced site.css)
 
 
 def test_status_reports_missing_keys(client, monkeypatch):
