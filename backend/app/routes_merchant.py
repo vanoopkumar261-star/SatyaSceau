@@ -94,6 +94,12 @@ def create_merchant(body: MerchantIn, session: Session = Depends(get_session)):
     }
 
 
+@router.get("/api/merchants/{merchant_id}/public")
+def merchant_public(merchant_id: str, session: Session = Depends(get_session)):
+    """What a customer may see: the shop's name (already printed on the QR poster). Nothing else."""
+    return {"name": _get_merchant(session, merchant_id).name}
+
+
 @router.get("/api/merchants/{merchant_id}/qr.png")
 def merchant_qr(merchant_id: str, session: Session = Depends(get_session)):
     _get_merchant(session, merchant_id)

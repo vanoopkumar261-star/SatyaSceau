@@ -1,61 +1,90 @@
 <!doctype html>
 <!-- Customer upload page, opened from the printed QR (/pay/<merchant_id>).
-     Owner: Pile 2 (Vision). Spec: docs/WORK_SPLIT.md -> Pile 2, Step 4.
-     No login, no analytics, no external scripts or fonts. -->
+     Owner: Pile 2 (Vision). System: DESIGN.md + /static/css/theme.css.
+     No login, no analytics. Ids #file #pick #spinner #sent #status #error #again and the .hidden class are read by the script. -->
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SatyaSceau — Show your payment</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center;
-           justify-content: center; gap: 20px; padding: 24px; text-align: center;
-           font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-           background: #f4f6f8; color: #1a2330; }
-    h1 { margin: 0; font-size: 1.6rem; }
-    .tag { margin: 0; color: #5b6776; }
-    .big { width: 100%; max-width: 360px; padding: 26px 16px; font-size: 1.3rem; font-weight: 700;
-           color: #fff; background: #1b5fd6; border: 0; border-radius: 16px; cursor: pointer; }
-    .big:active { background: #144aa8; }
-    .big[disabled] { background: #8a96a8; cursor: default; }
-    input[type=file] { display: none; }
-    .spinner { width: 44px; height: 44px; border: 5px solid #cfd6e0; border-top-color: #1b5fd6;
-               border-radius: 50%; animation: spin 0.9s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .hidden { display: none !important; }
-    .sent { font-size: 1.25rem; font-weight: 700; }
-    .status { width: 100%; max-width: 360px; padding: 18px 16px; border-radius: 14px; font-weight: 700;
-              font-size: 1.1rem; }
-    .status small { display: block; margin-top: 6px; font-weight: 400; font-size: .95rem; }
-    .WAITING { background: #fff4d6; color: #7a5600; }
-    .VERIFIED { background: #d9f5e1; color: #11632a; }
-    .NOT_VERIFIED { background: #fde0e0; color: #8a1c1c; }
-    .error { color: #8a1c1c; font-weight: 600; max-width: 360px; }
-    .again { background: none; border: 0; color: #1b5fd6; font-size: 1rem; text-decoration: underline; cursor: pointer; }
-    .langs { display: flex; gap: 8px; }
-    .langs button { font: inherit; padding: 6px 14px; border-radius: 999px; border: 1px solid #b8c2d0;
-                    background: #fff; color: #1a2330; cursor: pointer; }
-    .langs button[aria-pressed="true"] { border-color: #1b5fd6; color: #1b5fd6; font-weight: 700; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>SatyaSceau — Show your payment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400..800&amp;family=Noto+Sans+Devanagari:wght@400;600;700&amp;family=Source+Code+Pro:wght@400..600&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,500,0..1,0&amp;icon_names=account_balance,add_card,block,cancel,check,check_circle,chevron_right,content_copy,error,expand_more,fingerprint,hourglass_empty,hourglass_top,image,info,key,language,lock,login,logout,photo_camera,print,qr_code_2,receipt_long,record_voice_over,remove,replay,schedule,search,shield,sms,storefront,sync,task_alt,translate,upload,upload_file,verified,verified_user,visibility,visibility_off,volume_up,warning,wifi_off&amp;display=block">
+<link rel="stylesheet" href="/static/css/theme.css">
+<style>
+  /* Intent: a customer at a counter, one thumb, in a hurry. Focal: the upload pill, then the verdict. */
+  body { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: 12px var(--gutter);
+         max-width: 480px; width: 100%; margin: 0 auto; }
+  main { flex: 1; width: 100%; max-width: 480px; margin: 0 auto; padding: var(--s-2) var(--gutter) var(--s-8);
+         display: flex; flex-direction: column; gap: var(--s-4); }
+  .paying { padding: var(--s-6); display: grid; gap: 4px; }
+  .paying .k { font-weight: 600; font-size: var(--t-sm); }
+  .paying h1 { font-size: var(--t-2xl); letter-spacing: -0.01em; }
+  .paying p { font-size: var(--t-sm); opacity: .8; }
+  .langs { display: flex; gap: var(--s-2); }
+  .langs button { min-height: 40px; }
+  input[type=file] { display: none; }
+  .big { width: 100%; min-height: 64px; font-size: var(--t-lg); border-radius: var(--r-pill); }
+  .tip { text-align: center; color: var(--ink-2); font-size: var(--t-sm); }
+  .spinner { width: 44px; height: 44px; margin: var(--s-2) auto; border-radius: 50%; border: 4px solid var(--sage-3);
+             border-top-color: var(--ink); animation: spin .9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .hidden { display: none !important; }
+  .sent { display: flex; align-items: center; justify-content: center; gap: var(--s-2); font-weight: 700; font-size: var(--t-lg); }
+  .sent .ms { color: var(--ok); }
+  /* status card: the script sets "status <STATUS>" + text + <small> reason; the icon comes from CSS */
+  .status { display: grid; grid-template-columns: auto 1fr; column-gap: var(--s-3); align-items: center; padding: var(--s-5);
+            border-radius: var(--r-card); font-weight: 800; font-size: var(--t-xl); background: var(--paper); box-shadow: var(--shadow-card);
+            border: 2px solid transparent; }
+  .status::before { grid-row: span 2; font-family: "Material Symbols Outlined"; font-size: 40px; font-weight: 400;
+                    font-variation-settings: "FILL" 1; content: "hourglass_top"; }
+  .status small { grid-column: 2; display: block; margin-top: 2px; font-weight: 500; font-size: var(--t-sm); }
+  .status.WAITING { background: var(--wait-tint); color: var(--on-wait-tint); border-color: var(--wait); }
+  .status.WAITING::before { color: var(--wait); content: "hourglass_top"; }
+  .status.VERIFIED { background: var(--ok-tint); color: var(--on-ok-tint); border-color: var(--ok); }
+  .status.VERIFIED::before { color: var(--ok); content: "check_circle"; }
+  .status.NOT_VERIFIED { background: var(--no-tint); color: var(--on-no-tint); border-color: var(--no); }
+  .status.NOT_VERIFIED::before { color: var(--no); content: "cancel"; }
+  .error { display: flex; gap: var(--s-2); align-items: flex-start; background: var(--no-tint); color: var(--on-no-tint);
+           border-radius: var(--r-tile); padding: 12px 14px; font-weight: 600; }
+  .error::before { font-family: "Material Symbols Outlined"; font-size: 22px; content: "error"; font-weight: 400; }
+  .again { align-self: center; }
+  .privacy { display: flex; gap: var(--s-2); align-items: flex-start; justify-content: center; color: var(--ink-3); font-size: var(--t-xs);
+             text-align: center; padding: var(--s-4) var(--gutter) var(--s-6); max-width: 480px; margin: 0 auto; }
+</style>
 </head>
 <body>
-  <h1>SatyaSceau</h1>
-  <p class="tag">Every payment gets a witness.</p>
-  <div class="langs" role="group" aria-label="Voice language">
-    <button type="button" data-lang="hi" aria-pressed="true">🔊 हिंदी</button>
-    <button type="button" data-lang="en" aria-pressed="false">🔊 English</button>
-  </div>
+  <header class="bar">
+    <span class="site-brand"><span class="site-mark"><span class="ms" aria-hidden="true">verified</span></span>SatyaSceau</span>
+    <div class="langs seg" role="group" aria-label="Voice language">
+      <button type="button" data-lang="hi" aria-pressed="true"><span class="ms" aria-hidden="true">volume_up</span>हिंदी</button>
+      <button type="button" data-lang="en" aria-pressed="false"><span class="ms" aria-hidden="true">volume_up</span>English</button>
+    </div>
+  </header>
 
-  <!-- No `capture` attribute: the phone offers both camera and gallery. -->
-  <input id="file" type="file" accept="image/*">
-  <button id="pick" class="big" type="button">Upload payment screenshot</button>
+  <main>
+    <section class="slip paying">
+      <span class="k">Paying</span>
+      <h1 id="shopName">this shop</h1>
+      <p>Show your payment: upload the original screenshot from your UPI app.</p>
+    </section>
 
-  <div id="spinner" class="spinner hidden" role="status" aria-label="Checking"></div>
-  <div id="sent" class="sent hidden">Sent ✓ — show this to the shopkeeper</div>
-  <div id="status" class="status hidden" aria-live="polite"></div>
-  <div id="error" class="error hidden" role="alert"></div>
-  <button id="again" class="again hidden" type="button">Upload a different screenshot</button>
+    <!-- No `capture` attribute: the phone offers both camera and gallery. -->
+    <input id="file" type="file" accept="image/*">
+    <button id="pick" class="btn btn-ink big" type="button"><span class="ms" aria-hidden="true">upload_file</span>Upload payment screenshot</button>
+    <p class="tip">The success screen that shows the 12-digit UPI reference (UTR).</p>
+
+    <div id="spinner" class="spinner hidden" role="status" aria-label="Checking"></div>
+    <div id="sent" class="sent hidden"><span class="ms fill" aria-hidden="true">task_alt</span>Sent. Show this to the shopkeeper.</div>
+    <div id="status" class="status hidden" aria-live="polite"></div>
+    <div id="error" class="error hidden" role="alert"></div>
+    <button id="again" class="link-btn again hidden" type="button">Upload a different screenshot</button>
+  </main>
+
+  <footer class="privacy"><span class="ms" aria-hidden="true">lock</span><span>Your screenshot is checked and immediately discarded. It is never stored.</span></footer>
 
 <script>
 (function () {
@@ -64,6 +93,12 @@
   var pick = $("pick"), file = $("file"), spinner = $("spinner"), sent = $("sent"),
       statusEl = $("status"), errorEl = $("error"), again = $("again");
   var pollTimer = null;
+
+  // "Paying <shop>": the shop's public name (also printed on its QR poster).
+  fetch("/api/merchants/" + encodeURIComponent(merchantId) + "/public")
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) { if (d && d.name) $("shopName").textContent = d.name; })
+    .catch(function () { /* offline: keep "this shop" */ });
 
   var LABELS = {
     en: { WAITING: "Checking with the bank…", VERIFIED: "Payment verified", NOT_VERIFIED: "Payment not verified" },

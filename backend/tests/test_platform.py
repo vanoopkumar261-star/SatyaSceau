@@ -273,3 +273,10 @@ def test_payer_side_screenshot_is_never_proof(client, session, monkeypatch):
     r = _upload(client, m, key, bank="SBIUPI")
     assert r.status_code == 200 and r.json()["accepted"] is False
     assert session.exec(select(BankCredit).where(BankCredit.utr == "459025387802")).first() is None
+
+
+def test_public_shop_info_is_only_the_name(client):
+    m, _ = _new_merchant(client)
+    r = client.get(f"/api/merchants/{m['id']}/public")
+    assert r.status_code == 200 and r.json() == {"name": "Shop"}  # never the token, key or UPI ID
+    assert client.get("/api/merchants/nope/public").status_code == 404
