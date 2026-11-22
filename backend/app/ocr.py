@@ -148,6 +148,21 @@ def _preprocess(image_bytes: bytes) -> np.ndarray | None:
     return grey
 
 
+def extract_text(image_bytes: bytes) -> str:
+    """OCR text of the MERCHANT's own bank-SMS / bank-app screenshot, as one line.
+
+    Used only to feed sms_parser (same rules as a forwarded SMS). The caller must not store or
+    log it; the image never touches disk.
+    """
+    processed = _preprocess(image_bytes)
+    if processed is None:
+        return ""
+    if settings.TESSERACT_CMD:
+        pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
+    text = pytesseract.image_to_string(processed, lang="eng", config="--psm 6")
+    return " ".join(text.split())
+
+
 def _amount_from_large_text(image_bytes: bytes) -> float | None:
     """Second pass for the big headline amount ("₹150"). Only runs when pass 1 found no ₹ amount.
 

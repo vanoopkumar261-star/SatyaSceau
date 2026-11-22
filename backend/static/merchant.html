@@ -35,6 +35,25 @@
   ul.recent a:hover .grow { text-decoration: underline; }
   .qrbox { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
   .qrbox a { color: var(--accent); font-weight: 600; }
+  .toggle { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; font-size: .92rem; cursor: pointer;
+            padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  .toggle input { width: 18px; height: 18px; accent-color: var(--accent); margin: 0; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--bg); padding: 4px; border-radius: 12px; margin-top: 10px; }
+  .seg button { border: 0; background: none; padding: 9px; border-radius: 9px; color: var(--muted); font-weight: 600; }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .details-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+  ol.checks { list-style: none; margin: 10px 0 6px; padding: 0; }
+  ol.checks li { display: grid; grid-template-columns: 24px 1fr auto; gap: 4px 10px; align-items: start;
+                 padding: 8px 0; border-top: 1px solid var(--line); }
+  ol.checks li:first-child { border-top: 0; }
+  ol.checks .ic { font-size: 1.05rem; line-height: 1.3; }
+  ol.checks .lbl { font-weight: 600; }
+  ol.checks .st { font-size: .75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--idle-bg); color: var(--muted); }
+  ol.checks .st.pass { background: var(--green-bg); color: var(--green); }
+  ol.checks .st.fail { background: var(--red-bg); color: var(--red); }
+  ol.checks .st.wait { background: var(--amber-bg); color: var(--amber); }
+  ol.checks .dt { grid-column: 2 / 4; color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
+  .params { font-size: .8rem; margin: 6px 0 0; overflow-wrap: anywhere; }
   .qrbox img { width: 132px; height: 132px; image-rendering: pixelated; background: #fff; padding: 6px; border-radius: 8px; }
   h1 { font-size: 1.15rem; margin: 0; }
   .shop { color: var(--muted); font-size: .95rem; }
@@ -107,6 +126,7 @@
       <button class="primary" id="voiceBtn" type="button">🔊 Start listening</button>
       <button type="button" data-lang="hi" aria-pressed="true">हिंदी</button>
       <button type="button" data-lang="en" aria-pressed="false">English</button>
+      <label class="toggle"><input type="checkbox" id="detailsToggle"> <span id="detailsToggleLabel">🔍 Show detection details</span></label>
     </div>
     <div class="notice" id="voiceNote" hidden></div>
 
@@ -117,6 +137,14 @@
       <div class="reason" id="cardReason">Ask the customer to scan your QR and upload their payment screenshot.</div>
       <div class="meta" id="cardMeta"></div>
     </div>
+
+    <!-- How the verdict on the card was reached (merchant-only; shown when the checkbox is ticked) -->
+    <section class="panel details" id="detailsPanel" hidden aria-live="polite">
+      <div class="details-head"><strong id="detailsTitle">How this verdict was reached</strong>
+        <span class="muted" id="detailsCase"></span></div>
+      <ol class="checks" id="detailsChecks"></ol>
+      <p class="muted params" id="detailsParams"></p>
+    </section>
 
     <!-- Today at a glance (from the payments this screen knows about) -->
     <div class="stats" aria-label="Today">
@@ -137,7 +165,11 @@
 
     <!-- Merchant adds the bank's credit SMS by hand (no forwarder app needed) -->
     <details class="panel" id="pastePanel">
-      <summary id="pasteTitle">➕ Add bank SMS by hand</summary>
+      <summary id="pasteTitle">➕ Confirm a payment from your bank</summary>
+      <div class="seg" role="group" aria-label="How to add the bank credit">
+        <button type="button" data-pmode="sms" aria-pressed="true" id="modeSms">✍️ Paste SMS</button>
+        <button type="button" data-pmode="image" aria-pressed="false" id="modeImage">📷 Upload image</button>
+      </div>
       <label for="pasteBank" id="pasteBankLabel">Bank</label>
       <select id="pasteBank">
         <option value="HDFCBK">HDFC Bank</option>
@@ -155,9 +187,16 @@
         <option value="PAYTMB">Paytm Payments Bank</option>
         <option value="AIRBNK">Airtel Payments Bank</option>
       </select>
-      <label for="pasteBody" id="pasteBodyLabel">Paste the bank's credit SMS</label>
-      <textarea id="pasteBody" maxlength="2000" spellcheck="false"
-        placeholder="Rs.150.00 credited to A/c XX1234 on 22-11-26 by UPI Ref No 123456789012. -HDFC Bank"></textarea>
+      <div id="smsMode">
+        <label for="pasteBody" id="pasteBodyLabel">Paste the bank's credit SMS</label>
+        <textarea id="pasteBody" maxlength="2000" spellcheck="false"
+          placeholder="Rs.150.00 credited to A/c XX1234 on 22-11-26 by UPI Ref No 123456789012. -HDFC Bank"></textarea>
+      </div>
+      <div id="imageMode" hidden>
+        <label for="pasteImage" id="pasteImageLabel">Screenshot of the bank's credit SMS or bank-app notification</label>
+        <input type="file" id="pasteImage" accept="image/jpeg,image/png,image/webp">
+        <p class="muted" id="pasteImageHelp">Crop to one credit message showing the amount and the 12-digit UPI reference. The image is read and discarded, never stored.</p>
+      </div>
       <div class="controls"><button class="primary" id="pasteBtn" type="button">Add SMS</button></div>
       <p class="notice" id="pasteResult" role="status" hidden></p>
     </details>
@@ -213,6 +252,10 @@ const TEXT = {
     pasteTitle: "➕ बैंक SMS खुद जोड़ें", pasteBank: "बैंक", pasteBody: "बैंक का क्रेडिट SMS यहाँ पेस्ट करें",
     pasteAdd: "SMS जोड़ें", pasteOk: "बैंक क्रेडिट जुड़ गया",
     okToday: "आज सत्यापित", waitNow: "इंतज़ार में", badToday: "आज असत्यापित", qrTitle: "🧾 आपका QR कोड",
+    pasteTitle2: "➕ अपने बैंक से भुगतान की पुष्टि करें", modeSms: "✍️ SMS पेस्ट करें", modeImage: "📷 फ़ोटो अपलोड करें",
+    imageLabel: "बैंक के क्रेडिट SMS या बैंक ऐप सूचना का स्क्रीनशॉट", imageAdd: "फ़ोटो पढ़ें और जोड़ें", reading: "फ़ोटो पढ़ी जा रही है…",
+    detailsToggle: "🔍 जाँच का विवरण दिखाएँ", detailsTitle: "यह फ़ैसला कैसे हुआ", params: "मानदंड",
+    states: { pass: "पास", fail: "फ़ेल", wait: "इंतज़ार", skip: "छोड़ा", info: "जानकारी" },
     noHindi: "इस डिवाइस पर हिंदी आवाज़ नहीं है — अंग्रेज़ी में बोला जाएगा।",
   },
   en: {
@@ -228,6 +271,10 @@ const TEXT = {
     pasteTitle: "➕ Add bank SMS by hand", pasteBank: "Bank", pasteBody: "Paste the bank's credit SMS",
     pasteAdd: "Add SMS", pasteOk: "Bank credit added",
     okToday: "Verified today", waitNow: "Waiting", badToday: "Not verified today", qrTitle: "🧾 Your QR code",
+    pasteTitle2: "➕ Confirm a payment from your bank", modeSms: "✍️ Paste SMS", modeImage: "📷 Upload image",
+    imageLabel: "Screenshot of the bank's credit SMS or bank-app notification", imageAdd: "Read image & add", reading: "Reading the image…",
+    detailsToggle: "🔍 Show detection details", detailsTitle: "How this verdict was reached", params: "Parameters",
+    states: { pass: "pass", fail: "fail", wait: "waiting", skip: "skipped", info: "info" },
     noHindi: "",
   },
 };
@@ -303,10 +350,14 @@ function render() {
   }
 
   $("#recentTitle").textContent = t.recent;
-  $("#pasteTitle").textContent = t.pasteTitle;
+  $("#pasteTitle").textContent = t.pasteTitle2;
   $("#pasteBankLabel").textContent = t.pasteBank;
   $("#pasteBodyLabel").textContent = t.pasteBody;
-  $("#pasteBtn").textContent = t.pasteAdd;
+  $("#modeSms").textContent = t.modeSms; $("#modeImage").textContent = t.modeImage;
+  $("#pasteImageLabel").textContent = t.imageLabel;
+  $("#pasteBtn").textContent = pasteMode === "image" ? t.imageAdd : t.pasteAdd;
+  $("#detailsToggleLabel").textContent = t.detailsToggle;
+  refreshDetails();                // no-op unless the checkbox is on and the card's case changed
   $("#qrTitle").textContent = t.qrTitle;
 
   // Today at a glance (local day)
@@ -424,28 +475,53 @@ function onCase(c) {
   render();
 }
 
-// ---------- merchant adds a bank SMS by hand ----------
+// ---------- merchant confirms from their side: paste the SMS text OR upload an image ----------
+let pasteMode = "sms";
 try { const b = store.get("satyasceau.bank"); if (b) $("#pasteBank").value = b; } catch { /* default bank */ }
+function setPasteMode(mode) {
+  pasteMode = mode;
+  for (const b of document.querySelectorAll("[data-pmode]")) b.setAttribute("aria-pressed", String(b.dataset.pmode === mode));
+  $("#smsMode").hidden = mode !== "sms";
+  $("#imageMode").hidden = mode !== "image";
+  $("#pasteBtn").textContent = mode === "sms" ? TEXT[lang].pasteAdd : TEXT[lang].imageAdd;
+  $("#pasteResult").hidden = true;
+}
+for (const b of document.querySelectorAll("[data-pmode]")) b.addEventListener("click", () => setPasteMode(b.dataset.pmode));
+
 $("#pasteBtn").addEventListener("click", async () => {
-  const body = $("#pasteBody").value.trim();
   const out = $("#pasteResult"), btn = $("#pasteBtn");
-  if (!body) { $("#pasteBody").focus(); return; }
-  btn.disabled = true;
-  store.set("satyasceau.bank", $("#pasteBank").value);
-  try {
-    const r = await fetch(`/api/merchants/${encodeURIComponent(merchantId)}/bank-sms`, {
+  const base = `/api/merchants/${encodeURIComponent(merchantId)}`;
+  let request;
+  if (pasteMode === "sms") {
+    const body = $("#pasteBody").value.trim();
+    if (!body) { $("#pasteBody").focus(); return; }
+    request = fetch(`${base}/bank-sms`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ k: screenKey, bank: $("#pasteBank").value, body }),
     });
+  } else {
+    const file = $("#pasteImage").files && $("#pasteImage").files[0];
+    if (!file) { $("#pasteImage").focus(); return; }
+    const form = new FormData();
+    form.append("k", screenKey); form.append("bank", $("#pasteBank").value); form.append("image", file);
+    request = fetch(`${base}/bank-image`, { method: "POST", body: form });
+    out.textContent = TEXT[lang].reading; out.hidden = false;
+  }
+  btn.disabled = true;
+  store.set("satyasceau.bank", $("#pasteBank").value);
+  try {
+    const r = await request;
     const d = await r.json().catch(() => ({}));
     if (r.ok && d.accepted) {
       out.textContent = `✓ ${TEXT[lang].pasteOk}: ${rupees(d.amount)} · UTR ${d.utr}`;
-      $("#pasteBody").value = "";
+      $("#pasteBody").value = ""; $("#pasteImage").value = "";
       poll();                       // pick up any case it just verified, even if the stream is buffered
     } else if (r.ok) {
-      out.textContent = d.reason || "Not a bank credit SMS.";
+      out.textContent = d.reason || "Not a bank credit.";
     } else {
-      out.textContent = r.status === 403 ? "Screen key invalid — open your merchant link again." : `Error ${r.status}`;
+      out.textContent = r.status === 403 ? "Screen key invalid — open your merchant link again."
+        : r.status === 413 ? "That image is too big." : r.status === 415 ? "Use a JPEG, PNG or WebP image."
+        : r.status === 400 ? "Couldn't open that image." : `Error ${r.status}`;
     }
   } catch {
     out.textContent = "No connection — try again.";
@@ -453,6 +529,56 @@ $("#pasteBtn").addEventListener("click", async () => {
   out.hidden = false;
   btn.disabled = false;
 });
+
+// ---------- "Show detection details": how the card's verdict was reached ----------
+const CHECK_ICON = { pass: "✅", fail: "❌", wait: "⏳", skip: "➖", info: "ℹ️" };
+let detailsOn = store.get("satyasceau.details") === "1";
+let detailsKey = "";            // case + status the panel last showed: fetch only when it changes
+$("#detailsToggle").checked = detailsOn;
+$("#detailsToggle").addEventListener("change", (e) => {
+  detailsOn = e.target.checked;
+  store.set("satyasceau.details", detailsOn ? "1" : "0");
+  detailsKey = "";
+  refreshDetails();
+});
+
+async function refreshDetails() {
+  const panel = $("#detailsPanel");
+  const c = newest();
+  if (!detailsOn || !c) { panel.hidden = true; return; }
+  const key = `${c.case_id}|${c.status}|${c.decided_at || ""}`;
+  if (key === detailsKey) { panel.hidden = false; return; }
+  detailsKey = key;
+  try {
+    const r = await fetch(`/api/cases/${encodeURIComponent(c.case_id)}/details?k=${encodeURIComponent(screenKey)}`, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    const t = TEXT[lang];
+    $("#detailsTitle").textContent = t.detailsTitle;
+    $("#detailsCase").textContent = `${t[d.status] || d.status} · case ${d.case_id}`;
+    const list = $("#detailsChecks");
+    list.replaceChildren();
+    for (const ch of d.checks) {
+      const li = document.createElement("li");
+      const ic = document.createElement("span"); ic.className = "ic"; ic.textContent = CHECK_ICON[ch.state] || "•";
+      const lbl = document.createElement("span"); lbl.className = "lbl"; lbl.textContent = ch.label;
+      const st = document.createElement("span"); st.className = "st " + ch.state; st.textContent = t.states[ch.state] || ch.state;
+      li.append(ic, lbl, st);
+      if (ch.detail) {
+        const dt = document.createElement("span"); dt.className = "dt";
+        dt.textContent = ch.detail.replace(/\d{4}-\d{2}-\d{2}T[\d:.]+(\+00:00|Z)?/g, (iso) => time(iso));  // ISO -> local time
+        li.append(dt);
+      }
+      list.append(li);
+    }
+    const p = d.params;
+    $("#detailsParams").textContent = `${t.params}: window ${p.match_window_min} min · OCR min confidence ${p.ocr_min_conf} · `
+      + `lookalike distance ≤ ${p.phash_max_distance} · fingerprint ${p.image_sha256 || "—"}${p.image_phash ? " · pHash " + p.image_phash : ""}`;
+    panel.hidden = false;
+  } catch {
+    detailsKey = "";                // retry on the next update
+  }
+}
 
 async function poll() {
   try {

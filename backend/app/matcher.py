@@ -105,6 +105,7 @@ def evaluate_case(session, case) -> Case:
         now = utcnow()
         if case.amount is None:
             case.amount = credit.amount              # OCR missed it; the bank's amount is the truth
+            case.amount_from_bank = True             # so "detection details" never claims OCR read it
         case.status, case.reason = CaseStatus.VERIFIED, VERIFIED_OK
         case.bank_credited_at, case.decided_at = credit.credited_at, now
         session.add(UsedUTR(utr=case.utr, case_id=case.id, used_at=now))

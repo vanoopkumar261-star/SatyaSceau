@@ -55,6 +55,8 @@ class Case(SQLModel, table=True):
     image_phash: str = ""
     ocr_confidence: float = 0.0
     risk_score: Optional[float] = None
+    # True when OCR couldn't read the amount and the matcher took it from the bank credit instead
+    amount_from_bank: Optional[bool] = Field(default=False)
     bank_credited_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=utcnow, index=True)
     decided_at: Optional[datetime] = None

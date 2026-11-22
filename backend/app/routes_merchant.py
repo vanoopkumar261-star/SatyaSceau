@@ -5,22 +5,29 @@ import base64
 import io
 import json
 import secrets
+from datetime import timedelta
 
 import qrcode
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, Response, StreamingResponse
+from PIL import Image
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from app import events, ingest
+from app import events, ingest, matcher, ocr
 from app.config import STATIC_DIR, settings
 from app.db import get_session, utcnow
-from app.models import Case, Merchant
+from app.models import BankCredit, Case, CaseStatus, Merchant, Record, UsedUTR
 from app.sms_parser import BANK_CODES
 
-# Sender prefix for SMS the merchant pastes by hand. Kept in BankCredit.sender_id (e.g. "MP-HDFCBK"),
-# so the evidence trail shows the credit was typed in, not forwarded automatically from the bank.
+# How a bank credit reached us, kept in BankCredit.sender_id so the evidence trail shows it:
+#   "AX-HDFCBK" forwarded automatically from the bank's SMS
+#   "MP-HDFCBK" the merchant pasted the SMS text by hand
+#   "MI-HDFCBK" the merchant uploaded an image (screenshot of the SMS / bank app), read by OCR
 PASTED_SENDER_PREFIX = "MP"
+IMAGE_SENDER_PREFIX = "MI"
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 router = APIRouter()
 
@@ -138,6 +145,155 @@ def add_bank_sms(merchant_id: str, payload: BankSmsIn, session: Session = Depend
                       "UPI reference and a word like 'credited' or 'received'.",
         }
     return {"accepted": True, "utr": credit.utr, "amount": credit.amount}
+
+
+@router.post("/api/merchants/{merchant_id}/bank-image")
+async def add_bank_image(
+    merchant_id: str,
+    k: str = Form(default=""),
+    bank: str = Form(...),
+    image: UploadFile = File(...),
+    session: Session = Depends(get_session),
+):
+    """The merchant uploads an IMAGE of their bank credit (SMS screenshot or bank-app notification).
+
+    OCR reads it in memory, then it goes through the same SMS parser and matcher as a pasted or
+    forwarded SMS. The image and its text are never stored; only the parsed credit is.
+    """
+    try:
+        merchant = authorize_screen(session, merchant_id, k)
+        bank = bank.upper()
+        if bank not in BANK_CODES:
+            raise HTTPException(422, "Unknown bank")
+        if image.content_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(415, "Image must be JPEG, PNG or WebP")
+        limit = settings.MAX_UPLOAD_MB * 1024 * 1024
+        data = await image.read(limit + 1)
+    finally:
+        await image.close()
+    if len(data) > limit:
+        raise HTTPException(413, f"Image larger than {settings.MAX_UPLOAD_MB} MB")
+    try:
+        with Image.open(io.BytesIO(data)) as probe:
+            probe.verify()
+    except Exception:
+        raise HTTPException(400, "Could not read image")
+
+    text = await run_in_threadpool(ocr.extract_text, data)
+    del data
+    credit = await run_in_threadpool(
+        ingest.ingest_sms, session, merchant, f"{IMAGE_SENDER_PREFIX}-{bank}", text, utcnow()
+    )
+    del text
+    if credit is None:
+        return {
+            "accepted": False,
+            "reason": "Couldn't read a bank credit in that image. Crop it to ONE credit SMS showing "
+                      "the amount and the 12-digit UPI reference, or paste the SMS text instead.",
+        }
+    return {"accepted": True, "utr": credit.utr, "amount": credit.amount}
+
+
+# --- "Show detection details": how a verdict was reached --------------------------------------
+
+def _credit_source(sender_id: str) -> str:
+    prefix, _, bank = sender_id.partition("-")
+    if prefix == PASTED_SENDER_PREFIX:
+        return f"SMS pasted by merchant ({bank})"
+    if prefix == IMAGE_SENDER_PREFIX:
+        return f"bank screenshot uploaded by merchant ({bank})"
+    return f"SMS forwarded from {sender_id}"
+
+
+@router.get("/api/cases/{case_id}/details")
+def case_details(case_id: str, k: str = Query(default=""), session: Session = Depends(get_session)):
+    """Each check the verdict engine makes, with what it saw. Merchant only (screen key).
+
+    Read-only: it shows the evidence as it stands now, in the matcher's order.
+    States: pass | fail | wait | skip | info.
+    """
+    case = session.get(Case, case_id)
+    if case is None:
+        raise HTTPException(404, "Case not found")
+    authorize_screen(session, case.merchant_id, k)
+    window = timedelta(minutes=settings.MATCH_WINDOW_MIN)
+    final = case.status in CaseStatus.FINAL
+    checks = []
+
+    def add(key, label, state, detail=""):
+        checks.append({"key": key, "label": label, "state": state, "detail": detail})
+
+    readable = case.utr is not None
+    ocr_amount = None if case.amount_from_bank else case.amount   # what OCR itself read
+    add("ocr", "UPI reference (UTR) read from screenshot",
+        "pass" if readable else "fail",
+        f"{case.utr} · OCR confidence {case.ocr_confidence:.0f} (needs {settings.OCR_MIN_CONF:.0f})" if readable
+        else "Not readable with enough confidence → customer asked to retake")
+    add("amount_read", "Amount read from screenshot",
+        "pass" if ocr_amount is not None else "info",
+        f"₹{ocr_amount:,.2f}" if ocr_amount is not None else "Not read → the bank's amount is used")
+
+    if not readable:
+        for key, label in (("replay", "UTR not used before"), ("duplicate", "Screenshot not seen before"),
+                           ("bank", "Bank credit for this UTR"), ("window", "Credit within time window"),
+                           ("amount", "Amount matches the bank")):
+            add(key, label, "skip", "Skipped: no UTR")
+    else:
+        used = session.get(UsedUTR, case.utr)
+        if used is None:
+            add("replay", "UTR not used before", "pass", "No earlier payment claimed this UTR")
+        elif used.case_id == case.id:
+            add("replay", "UTR not used before", "pass", "This payment claimed the UTR")
+        else:
+            add("replay", "UTR not used before", "fail", f"Already used by another payment at {used.used_at.isoformat()}")
+
+        dup = matcher._is_duplicate_image(session, case)
+        add("duplicate", "Screenshot not seen before", "fail" if dup else "pass",
+            "Same image (or a re-saved copy with the same UTR) was uploaded earlier" if dup
+            else f"Fingerprint {case.image_sha256[:12]}… is new")
+
+        credits = session.exec(
+            select(BankCredit).where(BankCredit.merchant_id == case.merchant_id, BankCredit.utr == case.utr)
+        ).all()
+        if not credits:
+            add("bank", "Bank credit for this UTR", "fail" if final else "wait",
+                "None received" + ("" if final else " yet: forwarded SMS, pasted SMS or bank image will arrive here"))
+            add("window", f"Credit within {settings.MATCH_WINDOW_MIN} min of upload", "skip" if final else "wait", "")
+            add("amount", "Amount matches the bank", "skip" if final else "wait", "")
+        else:
+            best = min(credits, key=lambda c: abs(c.credited_at - case.created_at))
+            gap = abs(best.credited_at - case.created_at)
+            add("bank", "Bank credit for this UTR", "pass",
+                f"₹{best.amount:,.2f} at {best.credited_at.isoformat()} · {_credit_source(best.sender_id)}")
+            add("window", f"Credit within {settings.MATCH_WINDOW_MIN} min of upload",
+                "pass" if gap <= window else "fail", f"{int(gap.total_seconds())} s apart")
+            if ocr_amount is None:
+                add("amount", "Amount matches the bank", "info",
+                    f"Screenshot amount unreadable → bank amount ₹{best.amount:,.2f} used")
+            else:
+                same = abs(best.amount - ocr_amount) <= 0.01
+                add("amount", "Amount matches the bank", "pass" if same else "fail",
+                    f"Screen ₹{ocr_amount:,.2f} vs bank ₹{best.amount:,.2f}")
+
+    record = session.get(Record, case.id)
+    add("signed", "Signed, tamper-proof record",
+        "pass" if record else ("fail" if final else "wait"),
+        f"SHA-256 {record.record_sha256[:12]}… · Ed25519" if record else ("" if final else "Created when decided"))
+
+    return {
+        "case_id": case.id,
+        "status": case.status,
+        "reason": case.reason,
+        "checks": checks,
+        "params": {
+            "match_window_min": settings.MATCH_WINDOW_MIN,
+            "ocr_min_conf": settings.OCR_MIN_CONF,
+            "phash_max_distance": matcher.PHASH_MAX_DISTANCE,
+            "image_sha256": case.image_sha256[:16],
+            "image_phash": case.image_phash,
+            "risk_score": case.risk_score,
+        },
+    }
 
 
 @router.get("/api/merchants/{merchant_id}/stream")

@@ -118,3 +118,117 @@ def test_pasted_sms_needs_key_and_known_bank_and_a_real_credit(client):
     assert _paste(client, m, key, sms, bank="FAKEBK").status_code == 422
     r = _paste(client, m, key, "123456 is your OTP. Do not share. -HDFC")
     assert r.status_code == 200 and r.json()["accepted"] is False and "12-digit" in r.json()["reason"]
+
+
+# --- merchant uploads an IMAGE of the bank credit -------------------------------------------
+
+def _png_bytes():
+    from io import BytesIO
+    from PIL import Image as PILImage
+
+    buf = BytesIO()
+    PILImage.new("RGB", (40, 20), "white").save(buf, "PNG")
+    return buf.getvalue()
+
+
+def _upload(client, m, key, bank="HDFCBK", ctype="image/png", data=None):
+    return client.post(f"/api/merchants/{m['id']}/bank-image", data={"k": key, "bank": bank},
+                       files={"image": ("sms.png", data or _png_bytes(), ctype)})
+
+
+def test_bank_image_verifies_a_waiting_case(client, session, monkeypatch):
+    from app import ocr
+    from app.models import BankCredit
+
+    m, key = _new_merchant(client)
+    case = Case(merchant_id=m["id"], utr="431876509123", amount=150.0, image_sha256="img-bankimg")
+    session.add(case)
+    session.commit()
+    case_id = case.id
+    monkeypatch.setattr(ocr, "extract_text", lambda b: "Rs.150.00 credited to A/c XX1234 on 22-11-26 by UPI Ref No 431876509123. -HDFC Bank")
+    r = _upload(client, m, key)
+    assert r.status_code == 200 and r.json() == {"accepted": True, "utr": "431876509123", "amount": 150.0}
+    assert client.get(f"/api/cases/{case_id}").json()["status"] == "VERIFIED"
+    credit = session.exec(select(BankCredit).where(BankCredit.utr == "431876509123")).first()
+    assert credit.sender_id == "MI-HDFCBK"  # evidence shows it came from a merchant-uploaded image
+
+
+def test_bank_image_rejects_non_credit_bad_key_and_bad_type(client, monkeypatch):
+    from app import ocr
+
+    m, key = _new_merchant(client)
+    monkeypatch.setattr(ocr, "extract_text", lambda b: "Rs.150.00 debited from A/c XX1234 UPI Ref No 431876509123")
+    r = _upload(client, m, key)
+    assert r.status_code == 200 and r.json()["accepted"] is False and "12-digit" in r.json()["reason"]
+    assert _upload(client, m, "wrong").status_code == 403
+    assert _upload(client, m, key, bank="FAKEBK").status_code == 422
+    assert _upload(client, m, key, ctype="application/pdf").status_code == 415
+    assert _upload(client, m, key, data=b"not an image").status_code == 400
+
+
+# --- "Show detection details" --------------------------------------------------------------
+
+def _states(client, case_id, key):
+    r = client.get(f"/api/cases/{case_id}/details", params={"k": key})
+    assert r.status_code == 200
+    return {c["key"]: c["state"] for c in r.json()["checks"]}, r.json()
+
+
+def test_details_need_the_screen_key(client, session):
+    m, key = _new_merchant(client)
+    case = Case(merchant_id=m["id"], utr="431876509123", amount=1.0, image_sha256="x")
+    session.add(case)
+    session.commit()
+    assert client.get(f"/api/cases/{case.id}/details").status_code == 403
+    assert client.get(f"/api/cases/{case.id}/details", params={"k": "wrong"}).status_code == 403
+    assert client.get("/api/cases/nope/details", params={"k": key}).status_code == 404
+
+
+def test_details_explain_waiting_then_verified_then_replay(client, session):
+    m, key = _new_merchant(client)
+    first = Case(merchant_id=m["id"], utr="431876509123", amount=150.0, ocr_confidence=91, image_sha256="a" * 64)
+    session.add(first)
+    session.commit()
+    states, body = _states(client, first.id, key)
+    assert states["ocr"] == "pass" and states["replay"] == "pass" and states["duplicate"] == "pass"
+    assert states["bank"] == "wait" and states["signed"] == "wait"
+    assert body["params"]["match_window_min"] == 5
+
+    sms = "Rs.150.00 credited to A/c XX1234 on 22-11-26 by UPI Ref No 431876509123. -HDFC Bank"
+    _paste(client, m, key, sms)
+    states, body = _states(client, first.id, key)
+    assert body["status"] == "VERIFIED"
+    assert all(states[k] == "pass" for k in ("ocr", "replay", "duplicate", "bank", "window", "amount", "signed"))
+    bank = next(c for c in body["checks"] if c["key"] == "bank")
+    assert "pasted by merchant" in bank["detail"]
+
+    from app import matcher
+    again = Case(merchant_id=m["id"], utr="431876509123", amount=150.0, ocr_confidence=90, image_sha256="b" * 64)
+    session.add(again)
+    session.commit()
+    matcher.evaluate_case(session, again)
+    states, _ = _states(client, again.id, key)
+    assert states["replay"] == "fail"
+
+
+def test_details_for_an_unreadable_screenshot(client, session):
+    m, key = _new_merchant(client)
+    case = Case(merchant_id=m["id"], utr=None, image_sha256="c" * 64)
+    session.add(case)
+    session.commit()
+    states, _ = _states(client, case.id, key)
+    assert states["ocr"] == "fail" and states["replay"] == "skip" and states["bank"] == "skip"
+
+
+def test_details_never_claim_ocr_read_an_amount_the_bank_supplied(client, session):
+    """OCR missed the amount; the matcher used the bank's. The panel must keep saying so after VERIFIED."""
+    m, key = _new_merchant(client)
+    case = Case(merchant_id=m["id"], utr="431876509123", amount=None, ocr_confidence=88, image_sha256="d" * 64)
+    session.add(case)
+    session.commit()
+    _paste(client, m, key, "Rs.250.00 credited to A/c XX1234 on 22-11-26 by UPI Ref No 431876509123. -HDFC Bank")
+    states, body = _states(client, case.id, key)
+    assert body["status"] == "VERIFIED"
+    assert states["amount_read"] == "info" and states["amount"] == "info"
+    amount = next(c for c in body["checks"] if c["key"] == "amount")
+    assert "unreadable" in amount["detail"] and "250" in amount["detail"]
