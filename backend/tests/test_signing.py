@@ -167,3 +167,13 @@ def test_full_flow_produces_a_valid_record(session):
     rec = session.get(Record, c.id)
     assert rec is not None and json.loads(rec.record_json)["verdict"] == "VERIFIED"
     assert signing.verify_record(rec.record_json, rec.signature)
+
+
+def test_record_page_csp_allows_only_google_fonts_as_external(client, session, signed=None):
+    from app.routes_records import PAGE_HEADERS
+
+    csp = PAGE_HEADERS["Content-Security-Policy"]
+    assert "default-src 'none'" in csp and "frame-ancestors 'none'" in csp
+    assert "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;" in csp
+    assert "font-src https://fonts.gstatic.com;" in csp
+    assert "script-src 'self' 'unsafe-inline';" in csp  # no external scripts

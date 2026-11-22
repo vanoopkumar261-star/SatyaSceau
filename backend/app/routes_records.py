@@ -20,7 +20,10 @@ PAGE_HEADERS = {
     "Referrer-Policy": "no-referrer",
     "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff",
-    "Content-Security-Policy": "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+    # Fonts: the shared design system loads Noto Sans / Source Code Pro / Material Symbols from Google Fonts
+    # (stylesheets from fonts.googleapis.com, font files from fonts.gstatic.com). Nothing else external.
+    "Content-Security-Policy": "default-src 'none'; script-src 'self' 'unsafe-inline'; "
+                               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; "
                                "connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
 }
 
