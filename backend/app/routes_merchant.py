@@ -4,6 +4,7 @@ import asyncio
 import base64
 import io
 import json
+import re
 import secrets
 from datetime import timedelta
 
@@ -19,6 +20,7 @@ from app import events, ingest, matcher, ocr
 from app.config import STATIC_DIR, settings
 from app.db import get_session, utcnow
 from app.models import BankCredit, Case, CaseStatus, Merchant, Record, UsedUTR
+from app.schemas import ParsedCredit
 from app.sms_parser import BANK_CODES
 
 # How a bank credit reached us, kept in BankCredit.sender_id so the evidence trail shows it:
@@ -179,19 +181,39 @@ async def add_bank_image(
     except Exception:
         raise HTTPException(400, "Could not read image")
 
+    sender = f"{IMAGE_SENDER_PREFIX}-{bank}"
     text = await run_in_threadpool(ocr.extract_text, data)
-    del data
-    credit = await run_in_threadpool(
-        ingest.ingest_sms, session, merchant, f"{IMAGE_SENDER_PREFIX}-{bank}", text, utcnow()
-    )
-    del text
+    # 1) A screenshot of the bank's credit SMS: same strict parser as a forwarded SMS.
+    credit = await run_in_threadpool(ingest.ingest_sms, session, merchant, sender, text, utcnow())
+    # 2) Otherwise a UPI app's "Received" receipt (e.g. PhonePe "Received from ... Credited to ... UTR").
+    #    The strict parser wants Rs/INR/₹, but OCR often reads a large ₹ as "2" or "z", so use the
+    #    screenshot reader (handles those misreads, gates on OCR confidence). Only RECEIVE-side
+    #    receipts count: the customer's "Paid to / Debited from" screen is the claim, never the proof.
+    if credit is None and _is_receive_side(text):
+        receipt = await run_in_threadpool(ocr.analyze_screenshot, data)
+        if receipt.utr and receipt.amount is not None:
+            credit = await run_in_threadpool(
+                ingest.save_credit, session, merchant,
+                ParsedCredit(utr=receipt.utr, amount=receipt.amount, sender_id=sender), utcnow(),
+            )
+    del data, text
     if credit is None:
         return {
             "accepted": False,
-            "reason": "Couldn't read a bank credit in that image. Crop it to ONE credit SMS showing "
-                      "the amount and the 12-digit UPI reference, or paste the SMS text instead.",
+            "reason": "Couldn't read a bank credit in that image. Use ONE credit SMS, or your UPI app's "
+                      "'Received from … UTR' receipt, showing the amount and the 12-digit UTR, "
+                      "or paste the SMS text instead.",
         }
     return {"accepted": True, "utr": credit.utr, "amount": credit.amount}
+
+
+_RECEIVE_SIDE = re.compile(r"\b(received\s+from|credited\s+to|money\s+received|received)\b", re.I)
+_PAYER_SIDE = re.compile(r"\b(paid\s+to|debited|sent\s+to|payment\s+to)\b", re.I)
+
+
+def _is_receive_side(text: str) -> bool:
+    """A receiver's receipt ("Received from", "Credited to"), not the payer's screen ("Paid to")."""
+    return bool(_RECEIVE_SIDE.search(text)) and not _PAYER_SIDE.search(text)
 
 
 # --- "Show detection details": how a verdict was reached --------------------------------------

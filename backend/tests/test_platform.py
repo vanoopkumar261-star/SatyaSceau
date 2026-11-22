@@ -232,3 +232,44 @@ def test_details_never_claim_ocr_read_an_amount_the_bank_supplied(client, sessio
     assert states["amount_read"] == "info" and states["amount"] == "info"
     amount = next(c for c in body["checks"] if c["key"] == "amount")
     assert "unreadable" in amount["detail"] and "250" in amount["detail"]
+
+
+# --- merchant uploads their UPI app's "Received" receipt (not an SMS) ---------------------------
+
+PHONEPE_RECEIVED = ("Transaction Successful 06:11 am on 22 Nov 2026 Received from Aloo Of NIIT 21 Banking Name : X "
+                    "Transfer Details PhonePe Transaction ID T2611220611183852848155 Credited to XXXXXX7618 z1 "
+                    "UTR: 459025387802 Powered by")  # real OCR output: the big ₹1 came out as "21" / "z1"
+PHONEPE_PAID = ("Transaction Successful Paid to Raju Tea Stall 21 Transfer Details Transaction ID T2611220611183852848155 "
+                "UTR: 459025387802 Debited from XXXXXX1234 z1")
+
+
+def test_receive_side_upi_receipt_is_accepted(client, session, monkeypatch):
+    from app import ocr
+    from app.models import BankCredit
+    from app.schemas import OcrResult
+
+    m, key = _new_merchant(client)
+    case = Case(merchant_id=m["id"], utr="459025387802", amount=1.0, ocr_confidence=90, image_sha256="e" * 64)
+    session.add(case)
+    session.commit()
+    case_id = case.id
+    monkeypatch.setattr(ocr, "extract_text", lambda b: PHONEPE_RECEIVED)
+    monkeypatch.setattr(ocr, "analyze_screenshot", lambda b: OcrResult("459025387802", 1.0, 86.0, 120, "s", "p"))
+    r = _upload(client, m, key, bank="SBIUPI")
+    assert r.status_code == 200 and r.json() == {"accepted": True, "utr": "459025387802", "amount": 1.0}
+    assert client.get(f"/api/cases/{case_id}").json()["status"] == "VERIFIED"
+    assert session.exec(select(BankCredit).where(BankCredit.utr == "459025387802")).first().sender_id == "MI-SBIUPI"
+
+
+def test_payer_side_screenshot_is_never_proof(client, session, monkeypatch):
+    """The customer's 'Paid to / Debited from' screen is the claim. It must not count as the merchant's proof."""
+    from app import ocr
+    from app.models import BankCredit
+    from app.schemas import OcrResult
+
+    m, key = _new_merchant(client)
+    monkeypatch.setattr(ocr, "extract_text", lambda b: PHONEPE_PAID)
+    monkeypatch.setattr(ocr, "analyze_screenshot", lambda b: OcrResult("459025387802", 1.0, 86.0, 120, "s", "p"))
+    r = _upload(client, m, key, bank="SBIUPI")
+    assert r.status_code == 200 and r.json()["accepted"] is False
+    assert session.exec(select(BankCredit).where(BankCredit.utr == "459025387802")).first() is None

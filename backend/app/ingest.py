@@ -10,6 +10,14 @@ def ingest_sms(session, merchant, sender, body, received_at) -> BankCredit | Non
     parsed = parse_bank_sms(sender, body)
     if parsed is None:
         return None                                   # OTP / debit / promo / untrusted sender: store nothing
+    return save_credit(session, merchant, parsed, received_at)
+
+
+def save_credit(session, merchant, parsed, received_at) -> BankCredit:
+    """Store one already-validated bank credit (only utr/amount/time/sender), then re-check waiting cases.
+
+    Shared by SMS ingest and the merchant's uploaded receipt image.
+    """
     credit = BankCredit(
         merchant_id=merchant.id,
         utr=parsed.utr,

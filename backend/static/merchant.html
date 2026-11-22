@@ -193,9 +193,9 @@
           placeholder="Rs.150.00 credited to A/c XX1234 on 22-11-26 by UPI Ref No 123456789012. -HDFC Bank"></textarea>
       </div>
       <div id="imageMode" hidden>
-        <label for="pasteImage" id="pasteImageLabel">Screenshot of the bank's credit SMS or bank-app notification</label>
+        <label for="pasteImage" id="pasteImageLabel">Screenshot of the bank's credit SMS, or your UPI app's "Received from" receipt</label>
         <input type="file" id="pasteImage" accept="image/jpeg,image/png,image/webp">
-        <p class="muted" id="pasteImageHelp">Crop to one credit message showing the amount and the 12-digit UPI reference. The image is read and discarded, never stored.</p>
+        <p class="muted" id="pasteImageHelp">One credit SMS, or your own UPI app's Received receipt, showing the amount and the 12-digit UTR. Not the customer's Paid screen. Read and discarded, never stored.</p>
       </div>
       <div class="controls"><button class="primary" id="pasteBtn" type="button">Add SMS</button></div>
       <p class="notice" id="pasteResult" role="status" hidden></p>
@@ -253,7 +253,7 @@ const TEXT = {
     pasteAdd: "SMS जोड़ें", pasteOk: "बैंक क्रेडिट जुड़ गया",
     okToday: "आज सत्यापित", waitNow: "इंतज़ार में", badToday: "आज असत्यापित", qrTitle: "🧾 आपका QR कोड",
     pasteTitle2: "➕ अपने बैंक से भुगतान की पुष्टि करें", modeSms: "✍️ SMS पेस्ट करें", modeImage: "📷 फ़ोटो अपलोड करें",
-    imageLabel: "बैंक के क्रेडिट SMS या बैंक ऐप सूचना का स्क्रीनशॉट", imageAdd: "फ़ोटो पढ़ें और जोड़ें", reading: "फ़ोटो पढ़ी जा रही है…",
+    imageLabel: "बैंक के क्रेडिट SMS या आपके UPI ऐप की \"Received from\" रसीद का स्क्रीनशॉट", imageAdd: "फ़ोटो पढ़ें और जोड़ें", reading: "फ़ोटो पढ़ी जा रही है…",
     detailsToggle: "🔍 जाँच का विवरण दिखाएँ", detailsTitle: "यह फ़ैसला कैसे हुआ", params: "मानदंड",
     states: { pass: "पास", fail: "फ़ेल", wait: "इंतज़ार", skip: "छोड़ा", info: "जानकारी" },
     noHindi: "इस डिवाइस पर हिंदी आवाज़ नहीं है — अंग्रेज़ी में बोला जाएगा।",
@@ -272,7 +272,7 @@ const TEXT = {
     pasteAdd: "Add SMS", pasteOk: "Bank credit added",
     okToday: "Verified today", waitNow: "Waiting", badToday: "Not verified today", qrTitle: "🧾 Your QR code",
     pasteTitle2: "➕ Confirm a payment from your bank", modeSms: "✍️ Paste SMS", modeImage: "📷 Upload image",
-    imageLabel: "Screenshot of the bank's credit SMS or bank-app notification", imageAdd: "Read image & add", reading: "Reading the image…",
+    imageLabel: "Screenshot of the bank's credit SMS, or your UPI app's \"Received from\" receipt", imageAdd: "Read image & add", reading: "Reading the image…",
     detailsToggle: "🔍 Show detection details", detailsTitle: "How this verdict was reached", params: "Parameters",
     states: { pass: "pass", fail: "fail", wait: "waiting", skip: "skipped", info: "info" },
     noHindi: "",
